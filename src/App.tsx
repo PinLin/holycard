@@ -8,11 +8,34 @@
  * @format
  */
 
-import React from 'react';
-import { StatusBar, Text, useColorScheme, View } from 'react-native';
+import React, { useState } from 'react';
+import { StatusBar, Text, ToastAndroid, useColorScheme, View } from 'react-native';
+import { nfcUtil } from './util/nfc';
+
+nfcUtil.init();
 
 const App = () => {
     const isDarkMode = useColorScheme() === 'dark';
+    const [isReady, setIsReady] = useState(false);
+
+    async function readCard() {
+        try {
+            await nfcUtil.startRequestMifareClassic();
+            const uid = await nfcUtil.getCardUid();
+            ToastAndroid.show(uid, ToastAndroid.SHORT);
+        } catch (e) {
+            console.log(e);
+            ToastAndroid.show(`${e}`, ToastAndroid.SHORT);
+        } finally {
+            await nfcUtil.stopRequestMifareClassic();
+            setIsReady(false);
+        }
+    }
+
+    if (!isReady) {
+        readCard();
+        setIsReady(true);
+    }
 
     return (
         <>
