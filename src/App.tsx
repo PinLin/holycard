@@ -29,9 +29,15 @@ const App = () => {
                 throw "卡片未註冊";
             }
             const card = (await response.json()) as Card;
-            const key2A = card.keys.find(key => key.type == '2a')?.key;
+
+            const key = card.keys.find(key => key.type == '2a');
+            if (!key) {
+                throw "卡片未註冊";
+            }
+            const key2A = nfcUtil.convertKey(key.key);
+            const balance = await nfcUtil.getCardBalance(key2A);
             
-            ToastAndroid.show(`Key 2A: ${key2A}`, ToastAndroid.SHORT);
+            ToastAndroid.show(`Balance: ${balance}`, ToastAndroid.SHORT);
         } catch (e) {
             console.log(e);
             ToastAndroid.show(`${e}`, ToastAndroid.SHORT);

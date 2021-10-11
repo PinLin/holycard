@@ -19,4 +19,34 @@ export const nfcUtil = {
         console.log(`UID: ${uid}`);
         return uid;
     },
+    convertKey(keyHexString: string) {
+        const result = [] as number[];
+        for (let i = 0; i < keyHexString.length; i += 2) {
+            result.push(parseInt(keyHexString.slice(i, i + 2), 16));
+        }
+        return result;
+    },
+    async getCardBalance(key2A: number[]) {
+        for (let i = 0; i < 10; i++) {
+            try {
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(2, key2A);
+            } catch {
+                continue;
+            }
+
+            const block8 = await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(8 as any);
+            if (block8.length != 16) {
+                continue;
+            }
+
+            let balance = 0;
+            for (let j = 0; j < 4; j++) {
+                balance *= 256;
+                balance += block8[3 - j];
+            }
+            console.log(`Balance: ${balance}`);
+            return balance;
+        }
+        throw "讀取卡片失敗";
+    },
 }
