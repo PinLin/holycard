@@ -8,6 +8,7 @@
  * @format
  */
 
+import { ProgressBar } from '@react-native-community/progress-bar-android';
 import React, { useState } from 'react';
 import { StatusBar, Text, ToastAndroid, useColorScheme, View } from 'react-native';
 import { Card } from './model/card';
@@ -18,10 +19,12 @@ nfcUtil.init();
 const App = () => {
     const isDarkMode = useColorScheme() === 'dark';
     const [isReady, setIsReady] = useState(false);
+    const [isReading, setIsReading] = useState(false);
 
     async function readCard() {
         try {
             await nfcUtil.startRequestMifareClassic();
+            setIsReading(true);
             const uid = await nfcUtil.getCardUid();
 
             const response = await fetch(`https://card.pinlin.me/card/${uid}`);
@@ -36,7 +39,7 @@ const App = () => {
             }
             const key2A = nfcUtil.convertKey(key.key);
             const balance = await nfcUtil.getCardBalance(key2A);
-            
+
             ToastAndroid.show(`Balance: ${balance}`, ToastAndroid.SHORT);
         } catch (e) {
             console.log(e);
@@ -44,6 +47,7 @@ const App = () => {
         } finally {
             await nfcUtil.stopRequestMifareClassic();
             setIsReady(false);
+            setIsReading(false);
         }
     }
 
@@ -73,16 +77,28 @@ const App = () => {
                         color: isDarkMode ? 'white' : 'black',
                     }}
                 >HolyCard</Text>
-                <Text
+                <View
                     style={{
                         flex: 1,
-                        textAlignVertical: 'center',
-                        textAlign: 'center',
-                        fontSize: 24,
-                        fontWeight: '400',
-                        color: isDarkMode ? 'white' : 'black',
+                        justifyContent: 'center',
                     }}
-                >請感應卡片</Text>
+                >
+                    {
+                        isReading &&
+                        <ProgressBar />
+                    }
+                    {
+                        !isReading &&
+                        <Text
+                            style={{
+                                textAlign: 'center',
+                                fontSize: 24,
+                                fontWeight: '400',
+                                color: isDarkMode ? 'white' : 'black',
+                            }}
+                        >請感應卡片</Text>
+                    }
+                </View>
             </View>
         </>
     );
