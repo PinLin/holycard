@@ -1,4 +1,4 @@
-package com.holycard;
+package me.pinlin.holycard;
 
 import com.facebook.react.ReactActivity;
 
