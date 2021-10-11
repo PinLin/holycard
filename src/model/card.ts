@@ -1,11 +1,17 @@
 export interface Card {
     uid: string,
     name: string,
-    type: 'ipass' | 'easycard' | unknown,
-    keys: Key[],
+    type: CardType,
+    keys: CardKey[],
 }
 
-export interface Key {
+export enum CardType {
+    IPass = 'ipass',
+    EasyCard = 'easycard',
+    Unknown = 'unknown',
+}
+
+export interface CardKey {
     key: string,
     type: string,
 }

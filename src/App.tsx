@@ -10,8 +10,8 @@
 
 import { ProgressBar } from '@react-native-community/progress-bar-android';
 import React, { useState } from 'react';
-import { StatusBar, Text, ToastAndroid, useColorScheme, View } from 'react-native';
-import { Card } from './model/card';
+import { Image, Modal, StatusBar, Text, ToastAndroid, useColorScheme, View } from 'react-native';
+import { Card, CardType } from './model/card';
 import { nfcUtil } from './util/nfc';
 
 nfcUtil.init();
@@ -20,6 +20,10 @@ const App = () => {
     const isDarkMode = useColorScheme() === 'dark';
     const [isReady, setIsReady] = useState(false);
     const [isReading, setIsReading] = useState(false);
+    const [isShowing, setIsShowing] = useState(false);
+    const [cardType, setCardType] = useState(CardType.Unknown);
+    const [cardName, setCardName] = useState('');
+    const [cardBalance, setCardBalance] = useState(0);
 
     async function readCard() {
         try {
@@ -40,14 +44,17 @@ const App = () => {
             const key2A = nfcUtil.convertKey(key.key);
             const balance = await nfcUtil.getCardBalance(key2A);
 
-            ToastAndroid.show(`Balance: ${balance}`, ToastAndroid.SHORT);
+            setCardName(card.name);
+            setCardType(card.type);
+            setCardBalance(balance);
+            setIsShowing(true);
         } catch (e) {
             console.log(e);
             ToastAndroid.show(`${e}`, ToastAndroid.SHORT);
-        } finally {
-            await nfcUtil.stopRequestMifareClassic();
             setIsReady(false);
             setIsReading(false);
+        } finally {
+            await nfcUtil.stopRequestMifareClassic();
         }
     }
 
@@ -100,6 +107,63 @@ const App = () => {
                     }
                 </View>
             </View>
+            <Modal
+                animationType='slide'
+                transparent={true}
+                visible={isShowing}
+                onRequestClose={() => {
+                    setIsReady(false);
+                    setIsReading(false);
+                    setIsShowing(false);
+                }}
+            >
+                <View
+                    style={{
+                        flex: 1,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}
+                >
+                    <View
+                        style={{
+                            margin: 20,
+                            backgroundColor: isDarkMode ? '#303030' : '#FAFAFA',
+                            borderRadius: 10,
+                            paddingHorizontal: 30,
+                            paddingVertical: 50,
+                            shadowColor: isDarkMode ? 'white' : 'black',
+                            shadowRadius: 2,
+                            elevation: 5,
+                        }}
+                    >
+                        <Image
+                            source={
+                                cardType == CardType.EasyCard ? require('./image/easycard.png') :
+                                    cardType == CardType.IPass ? require('./image/ipass.png') :
+                                        require('./image/unknown.png')
+                            }
+                        />
+                        <Text
+                            style={{
+                                marginTop: 30,
+                                textAlign: 'center',
+                                fontSize: 24,
+                                fontWeight: '400',
+                                color: isDarkMode ? 'white' : 'black',
+                            }}
+                        >{cardName}</Text>
+                        <Text
+                            style={{
+                                marginTop: 30,
+                                textAlign: 'center',
+                                fontSize: 24,
+                                fontWeight: '400',
+                                color: isDarkMode ? 'white' : 'black',
+                            }}
+                        >卡片餘額：{cardBalance} 元</Text>
+                    </View>
+                </View>
+            </Modal>
         </>
     );
 };
