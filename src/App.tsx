@@ -10,6 +10,7 @@
 
 import React, { useState } from 'react';
 import { StatusBar, Text, ToastAndroid, useColorScheme, View } from 'react-native';
+import { Card } from './model/card';
 import { nfcUtil } from './util/nfc';
 
 nfcUtil.init();
@@ -22,7 +23,15 @@ const App = () => {
         try {
             await nfcUtil.startRequestMifareClassic();
             const uid = await nfcUtil.getCardUid();
-            ToastAndroid.show(uid, ToastAndroid.SHORT);
+
+            const response = await fetch(`https://card.pinlin.me/card/${uid}`);
+            if (!response.ok) {
+                throw "卡片未註冊";
+            }
+            const card = (await response.json()) as Card;
+            const key2A = card.keys.find(key => key.type == '2a')?.key;
+            
+            ToastAndroid.show(`Key 2A: ${key2A}`, ToastAndroid.SHORT);
         } catch (e) {
             console.log(e);
             ToastAndroid.show(`${e}`, ToastAndroid.SHORT);
