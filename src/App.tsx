@@ -25,12 +25,11 @@ const App = () => {
     const [cardName, setCardName] = useState('');
     const [cardBalance, setCardBalance] = useState(0);
 
-    async function readCard() {
-        try {
-            await nfcUtil.startRequestMifareClassic();
+    if (!isReady) {
+        nfcUtil.requestMifareClassic(async () => {
             setIsReading(true);
-            const uid = await nfcUtil.getCardUid();
 
+            const uid = await nfcUtil.getCardUid();
             const response = await fetch(`https://card.pinlin.me/card/${uid}`);
             if (!response.ok) {
                 throw "卡片未註冊";
@@ -48,18 +47,13 @@ const App = () => {
             setCardType(card.type);
             setCardBalance(balance);
             setIsShowing(true);
-        } catch (e) {
-            console.log(e);
+        }).catch((e) => {
             ToastAndroid.show(`${e}`, ToastAndroid.SHORT);
+
             setIsReady(false);
             setIsReading(false);
-        } finally {
-            await nfcUtil.stopRequestMifareClassic();
-        }
-    }
+        });
 
-    if (!isReady) {
-        readCard();
         setIsReady(true);
     }
 

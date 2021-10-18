@@ -4,14 +4,21 @@ export const nfcUtil = {
     init() {
         return nfcManager.start();
     },
-    async startRequestMifareClassic() {
-        const tech = await nfcManager.requestTechnology(NfcTech.MifareClassic);
-        if (tech !== NfcTech.MifareClassic) {
-            throw "不支援此卡片";
-        };
-    },
-    stopRequestMifareClassic() {
-        return nfcManager.cancelTechnologyRequest();
+    async requestMifareClassic(handler: () => void | Promise<void>) {
+        try {
+            const tech = await nfcManager.requestTechnology(NfcTech.MifareClassic);
+            if (tech != null) {
+                if (tech != NfcTech.MifareClassic) {
+                    throw "不支援此卡片";
+                };
+                await handler();
+            }
+        } catch (e) {
+            console.log(e);
+            throw e;
+        } finally {
+            await nfcManager.cancelTechnologyRequest();
+        }
     },
     async getCardUid() {
         const tag = await nfcManager.getTag();
