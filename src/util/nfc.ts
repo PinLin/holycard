@@ -6,6 +6,13 @@ export const nfcUtil = {
     },
     async requestMifareClassic(handler: () => void | Promise<void>) {
         try {
+            await nfcManager.cancelTechnologyRequest();
+        }
+        catch (e) {
+            console.log(e);
+        }
+
+        try {
             const tech = await nfcManager.requestTechnology(NfcTech.MifareClassic);
             if (tech != null) {
                 if (tech != NfcTech.MifareClassic) {
