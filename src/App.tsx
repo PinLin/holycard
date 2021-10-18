@@ -36,7 +36,7 @@ const App = () => {
             }
             const card = (await response.json()) as Card;
 
-            const key = card.keys.find(key => key.type == '2a');
+            const key = card.keys.find(key => key.type.toLowerCase() == '2a');
             if (!key) {
                 throw "卡片未註冊";
             }
