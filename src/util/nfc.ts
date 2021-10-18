@@ -12,6 +12,8 @@ export const nfcUtil = {
                     throw "不支援此卡片";
                 };
                 await handler();
+            } else {
+                await this.requestMifareClassic(handler);
             }
         } catch (e) {
             console.log(e);
