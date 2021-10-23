@@ -60,6 +60,9 @@ export const nfcUtil = {
                 balance *= 256;
                 balance += block8[3 - j];
             }
+            if (balance >= 2147483648) {
+                balance -= 2147483648 * 2;
+            }
             console.log(`Balance: ${balance}`);
             return balance;
         }
