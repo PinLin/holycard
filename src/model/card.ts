@@ -8,6 +8,7 @@ export interface Card {
 export enum CardType {
     IPass = 'ipass',
     EasyCard = 'easycard',
+    HappyCash = 'happycash',
     Unknown = 'unknown',
 }
 

@@ -132,9 +132,10 @@ const App = () => {
                     >
                         <Image
                             source={
-                                cardType == CardType.EasyCard ? require('./image/easycard.png') :
-                                    cardType == CardType.IPass ? require('./image/ipass.png') :
-                                        require('./image/unknown.png')
+                                cardType == CardType.IPass ? require('./image/ipass.png') :
+                                    cardType == CardType.EasyCard ? require('./image/easycard.png') :
+                                        cardType == CardType.HappyCash ? require('./image/happycash.png') :
+                                            require('./image/unknown.png')
                             }
                         />
                         <Text
