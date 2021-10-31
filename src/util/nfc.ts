@@ -86,9 +86,6 @@ export const nfcUtil = {
                 continue;
             }
 
-            console.log(44, block44);
-            console.log(46, block46);
-
             let points = block44[4] - block46[0];
             console.log(`KuoKuangPoints: ${points}`);
             return points;
