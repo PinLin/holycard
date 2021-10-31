@@ -35,17 +35,15 @@ const App = () => {
                 throw "卡片未註冊";
             }
             const card = (await response.json()) as Card;
-
-            const key = card.keys.find(key => key.type.toLowerCase() == '2a');
-            if (!key) {
-                throw "卡片未註冊";
-            }
-            const key2A = nfcUtil.convertKey(key.key);
-            const balance = await nfcUtil.getCardBalance(key2A);
-
             setCardName(card.name);
             setCardType(card.type);
-            setCardBalance(balance);
+
+            const key2A = card.keys.find(key => key.type.toLowerCase() == '2a');
+            if (!key2A) {
+                throw "卡片未註冊";
+            }
+            setCardBalance(await nfcUtil.getCardBalance(nfcUtil.convertKey(key2A.key)));
+
             setIsShowing(true);
         }).catch((e) => {
             ToastAndroid.show(`${e}`, ToastAndroid.SHORT);
