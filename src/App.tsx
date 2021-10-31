@@ -24,6 +24,8 @@ const App = () => {
     const [cardType, setCardType] = useState(CardType.Unknown);
     const [cardName, setCardName] = useState('');
     const [cardBalance, setCardBalance] = useState(0);
+    const [isShowKuoKuangPoints, setIsShowKuoKuangPoints] = useState(false);
+    const [cardKuoKuangPoints, setCardKuoKuangPoints] = useState(0);
 
     if (!isReady) {
         nfcUtil.requestMifareClassic(async () => {
@@ -46,7 +48,10 @@ const App = () => {
 
             const key11A = card.keys.find(key => key.type.toLowerCase() == '11a');
             if (key11A) {
-                await nfcUtil.getCardKuoKuangPoints(nfcUtil.convertKey(key11A.key));
+                setCardKuoKuangPoints(await nfcUtil.getCardKuoKuangPoints(nfcUtil.convertKey(key11A.key)));
+                setIsShowKuoKuangPoints(true);
+            } else {
+                setIsShowKuoKuangPoints(false);
             }
 
             setIsShowing(true);
@@ -159,6 +164,17 @@ const App = () => {
                                 color: isDarkMode ? 'white' : 'black',
                             }}
                         >卡片餘額：{cardBalance} 元</Text>
+                        {
+                            isShowKuoKuangPoints &&
+                            <Text
+                                style={{
+                                    textAlign: 'center',
+                                    fontSize: 24,
+                                    fontWeight: '400',
+                                    color: isDarkMode ? 'white' : 'black',
+                                }}
+                            >國光回數：{cardKuoKuangPoints} 點</Text>
+                        }
                     </View>
                 </View>
             </Modal>
