@@ -44,6 +44,11 @@ const App = () => {
             }
             setCardBalance(await nfcUtil.getCardBalance(nfcUtil.convertKey(key2A.key)));
 
+            const key11A = card.keys.find(key => key.type.toLowerCase() == '11a');
+            if (key11A) {
+                await nfcUtil.getCardKuoKuangPoints(nfcUtil.convertKey(key11A.key));
+            }
+
             setIsShowing(true);
         }).catch((e) => {
             ToastAndroid.show(`${e}`, ToastAndroid.SHORT);

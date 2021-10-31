@@ -68,4 +68,31 @@ export const nfcUtil = {
         }
         throw "讀取卡片失敗";
     },
+    async getCardKuoKuangPoints(key11A: number[]) {
+        for (let i = 0; i < 10; i++) {
+            try {
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(11, key11A);
+            } catch {
+                continue;
+            }
+
+            const block44 = await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(44 as any);
+            if (block44.length != 16) {
+                continue;
+            }
+
+            const block46 = await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(46 as any);
+            if (block46.length != 16) {
+                continue;
+            }
+
+            console.log(44, block44);
+            console.log(46, block46);
+
+            let points = block44[4] - block46[0];
+            console.log(`KuoKuangPoints: ${points}`);
+            return points;
+        }
+        throw "讀取卡片失敗";
+    },
 }
