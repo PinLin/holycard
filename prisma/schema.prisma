@@ -9,3 +9,17 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Card {
+  uid     String    @id
+  type    CardType  @default(UNKNOWN)
+  name    String
+  comment String
+}
+
+enum CardType {
+  UNKNOWN
+  HAPPY_CASH
+  EASY_CARD
+  I_PASS
+}
