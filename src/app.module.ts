@@ -2,10 +2,11 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_PIPE } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CardModule } from './card/card.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
-    imports: [PrismaModule],
+    imports: [CardModule, PrismaModule],
     controllers: [AppController],
     providers: [
         AppService,
