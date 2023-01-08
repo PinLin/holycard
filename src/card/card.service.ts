@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Card } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertCardDto } from './dto/upsert-card.dto';
+import { CardNotExistedException } from './exception/card-not-existed.exception';
 
 @Injectable()
 export class CardService {
@@ -13,5 +14,12 @@ export class CardService {
             update: payload,
             create: payload,
         });
+    }
+
+    async deleteCard(uid: string): Promise<void> {
+        const card = await this.prisma.card.findUnique({ where: { uid } });
+        if (!card) throw new CardNotExistedException();
+
+        await this.prisma.card.delete({ where: { uid } });
     }
 }
