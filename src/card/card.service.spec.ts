@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Card, CardType, PrismaClient } from '@prisma/client';
+import { Card, CardSector, CardType, PrismaClient } from '@prisma/client';
 import { DeepMockProxy, mockDeep } from 'jest-mock-extended';
 import { PrismaService } from '../prisma/prisma.service';
 import { CardService } from './card.service';
+import { UpsertCardSectorDto } from './dto/upsert-card-sector.dto';
 import { UpsertCardDto } from './dto/upsert-card.dto';
 import { CardNotExistedException } from './exception/card-not-existed.exception';
 
@@ -15,6 +16,12 @@ describe('CardService', () => {
         type: CardType.EASY_CARD,
         name: '9122 0000 0000 0000',
         comment: 'testing',
+    };
+    const sampleCardSector: CardSector = {
+        cardUid: sampleCard.uid,
+        index: 0,
+        keyA: '123456789012',
+        keyB: null,
     };
 
     beforeEach(async () => {
@@ -58,5 +65,35 @@ describe('CardService', () => {
         await expect(service.deleteCard(uid)).rejects.toThrowError(
             CardNotExistedException,
         );
+    });
+
+    it('should upsert the card sector', async () => {
+        const { uid } = sampleCard;
+        const { index: sectorIndex } = sampleCardSector;
+        const payload: UpsertCardSectorDto = {
+            keyA: sampleCardSector.keyA!,
+        };
+        prisma.card.findUnique.mockResolvedValueOnce(sampleCard);
+        prisma.cardSector.upsert.mockResolvedValueOnce(sampleCardSector);
+
+        const cardSector = await service.upsertCardSector(
+            uid,
+            sectorIndex,
+            payload,
+        );
+        expect(cardSector).toEqual(sampleCardSector);
+    });
+
+    it('should fail to upsert a card sector because the card is not existing', async () => {
+        const { uid } = sampleCard;
+        const { index: sectorIndex } = sampleCardSector;
+        const payload: UpsertCardSectorDto = {
+            keyA: sampleCardSector.keyA!,
+        };
+        prisma.card.findUnique.mockResolvedValueOnce(null);
+
+        await expect(
+            service.upsertCardSector(uid, sectorIndex, payload),
+        ).rejects.toThrowError(CardNotExistedException);
     });
 });

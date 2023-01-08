@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Card } from '@prisma/client';
+import { Card, CardSector } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpsertCardSectorDto } from './dto/upsert-card-sector.dto';
 import { UpsertCardDto } from './dto/upsert-card.dto';
 import { CardNotExistedException } from './exception/card-not-existed.exception';
 
@@ -20,6 +21,24 @@ export class CardService {
         const card = await this.prisma.card.findUnique({ where: { uid } });
         if (!card) throw new CardNotExistedException();
 
-        await this.prisma.card.delete({ where: { uid } });
+        await this.prisma.$transaction([
+            this.prisma.cardSector.deleteMany({ where: { cardUid: uid } }),
+            this.prisma.card.delete({ where: { uid } }),
+        ]);
+    }
+
+    async upsertCardSector(
+        uid: string,
+        sectorIndex: number,
+        payload: UpsertCardSectorDto,
+    ): Promise<CardSector> {
+        const card = await this.prisma.card.findUnique({ where: { uid } });
+        if (!card) throw new CardNotExistedException();
+
+        return await this.prisma.cardSector.upsert({
+            where: { cardUid_index: { cardUid: uid, index: sectorIndex } },
+            create: { ...payload, cardUid: uid, index: sectorIndex },
+            update: payload,
+        });
     }
 }

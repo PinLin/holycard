@@ -11,10 +11,11 @@ datasource db {
 }
 
 model Card {
-  uid     String    @id
-  type    CardType  @default(UNKNOWN)
-  name    String
-  comment String
+  uid       String    @id
+  type      CardType  @default(UNKNOWN)
+  name      String
+  comment   String
+  sectors   CardSector[]
 }
 
 enum CardType {
@@ -22,4 +23,13 @@ enum CardType {
   HAPPY_CASH
   EASY_CARD
   I_PASS
+}
+
+model CardSector {
+  card      Card?   @relation(fields: [cardUid], references: [uid])
+  cardUid   String
+  index     Int
+  keyA      String?
+  keyB      String?
+  @@id([cardUid, index])
 }
