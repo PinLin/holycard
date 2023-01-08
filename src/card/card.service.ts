@@ -17,6 +17,19 @@ export class CardService {
         });
     }
 
+    async findAllCards(): Promise<Card[]> {
+        return await this.prisma.card.findMany();
+    }
+
+    async findCard(uid: string): Promise<Card> {
+        const card = await this.prisma.card.findUnique({
+            where: { uid },
+            include: { sectors: true },
+        });
+        if (!card) throw new CardNotExistedException();
+        return card;
+    }
+
     async deleteCard(uid: string): Promise<void> {
         const card = await this.prisma.card.findUnique({ where: { uid } });
         if (!card) throw new CardNotExistedException();

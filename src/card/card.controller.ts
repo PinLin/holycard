@@ -2,6 +2,7 @@ import {
     Body,
     Controller,
     Delete,
+    Get,
     HttpCode,
     HttpStatus,
     NotFoundException,
@@ -22,6 +23,26 @@ export class CardController {
     async upsertCard(@Body() payload: UpsertCardDto): Promise<Card> {
         const card = await this.cardService.upsertCard(payload);
         return card;
+    }
+
+    @Get()
+    async findAllCards(): Promise<{ result: Card[] }> {
+        const cards = await this.cardService.findAllCards();
+        return { result: cards };
+    }
+
+    @Get(':uid')
+    async findCard(@Param('uid') uid: string) {
+        try {
+            const card = await this.cardService.findCard(uid);
+            return card;
+        } catch (error) {
+            if (error instanceof CardNotExistedException) {
+                throw new NotFoundException('This card is not existed.');
+            } else {
+                throw error;
+            }
+        }
     }
 
     @Delete(':uid')
