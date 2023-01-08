@@ -16,6 +16,7 @@ describe('CardController', () => {
         type: CardType.EASY_CARD,
         name: '9122 0000 0000 0000',
         comment: 'testing',
+        createdTime: new Date(),
     };
 
     beforeEach(async () => {

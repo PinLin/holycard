@@ -16,12 +16,14 @@ describe('CardService', () => {
         type: CardType.EASY_CARD,
         name: '9122 0000 0000 0000',
         comment: 'testing',
+        createdTime: new Date(),
     };
     const sampleCardSector: CardSector = {
         cardUid: sampleCard.uid,
         index: 0,
         keyA: '123456789012',
         keyB: null,
+        createdTime: new Date(),
     };
 
     beforeEach(async () => {
