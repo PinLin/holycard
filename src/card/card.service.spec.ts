@@ -16,6 +16,7 @@ describe('CardService', () => {
         type: CardType.EASY_CARD,
         name: '9122 0000 0000 0000',
         comment: 'testing',
+        tags: ['KuoKuangCard'],
         createdTime: new Date(),
     };
     const sampleCardSector: CardSector = {

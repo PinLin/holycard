@@ -16,6 +16,7 @@ model Card {
   name          String
   comment       String
   sectors       CardSector[]
+  tags          String[]
   createdTime   DateTime    @default(now())
 }
 

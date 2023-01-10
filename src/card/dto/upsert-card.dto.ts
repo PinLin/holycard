@@ -2,6 +2,7 @@ import { CardType } from '@prisma/client';
 import {
     IsEnum,
     IsNotEmpty,
+    IsOptional,
     IsString,
     Length,
     MaxLength,
@@ -24,4 +25,8 @@ export class UpsertCardDto {
     @IsString()
     @MaxLength(100)
     comment: string;
+
+    @IsString({ each: true })
+    @IsOptional()
+    tags?: string[];
 }
