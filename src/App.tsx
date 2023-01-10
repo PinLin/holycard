@@ -19,7 +19,7 @@ import {
     useColorScheme,
     View,
 } from 'react-native';
-import { Card, CardType } from './model/card';
+import { Card, CardType } from './model/card.model';
 import { NfcService } from './service/nfc.service';
 
 const nfcService = new NfcService();
@@ -31,7 +31,7 @@ const App = () => {
     const [isReady, setIsReady] = useState(false);
     const [isReadingCard, setIsReadingCard] = useState(false);
     const [isShowingResult, setIsShowingResult] = useState(false);
-    const [cardType, setCardType] = useState(CardType.Unknown);
+    const [cardType, setCardType] = useState(CardType.UNKNOWN);
     const [cardName, setCardName] = useState('');
     const [cardBalance, setCardBalance] = useState(0);
 
@@ -47,7 +47,7 @@ const App = () => {
 
                 const uid = await nfcService.readCardUid();
                 const response = await fetch(
-                    `https://card.pinlin.me/card/${uid}`,
+                    `https://holycard.pinlin.me/card/${uid}`,
                 );
                 if (!response.ok) {
                     throw '查無卡片資料';
@@ -57,18 +57,18 @@ const App = () => {
                 setCardName(card.name);
                 setCardType(card.type);
 
-                const sector2KeyA = card.keys.find(
-                    (key) => key.type.toLowerCase() == '2a',
-                )?.key;
+                const sector2KeyA = card.sectors.find(
+                    (s) => s.index === 2,
+                )?.keyA;
                 if (!sector2KeyA) {
                     throw '無法讀取餘額';
                 }
                 const balance = await nfcService.readCardBalance(sector2KeyA);
                 setCardBalance(balance);
 
-                const sector11KeyA = card.keys.find(
-                    (key) => key.type.toLowerCase() == '11a',
-                )?.key;
+                const sector11KeyA = card.sectors.find(
+                    (s) => s.index === 11,
+                )?.keyA;
                 if (sector11KeyA) {
                     const kuoKuangPoints =
                         await nfcService.readCardKuoKuangPoints(sector11KeyA);
@@ -166,11 +166,11 @@ const App = () => {
                     >
                         <Image
                             source={
-                                cardType == CardType.IPass
+                                cardType == CardType.I_PASS
                                     ? require('./image/ipass.png')
-                                    : cardType == CardType.EasyCard
+                                    : cardType == CardType.EASY_CARD
                                     ? require('./image/easycard.png')
-                                    : cardType == CardType.HappyCash
+                                    : cardType == CardType.HAPPY_CASH
                                     ? require('./image/happycash.png')
                                     : require('./image/unknown.png')
                             }
