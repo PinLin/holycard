@@ -21,6 +21,8 @@ export class CardController {
 
     @Put()
     async upsertCard(@Body() payload: UpsertCardDto): Promise<Card> {
+        payload.uid = payload.uid.toUpperCase();
+
         const card = await this.cardService.upsertCard(payload);
         return card;
     }
@@ -34,6 +36,8 @@ export class CardController {
     @Get(':uid')
     async findCard(@Param('uid') uid: string) {
         try {
+            uid = uid.toUpperCase();
+
             const card = await this.cardService.findCard(uid);
             return card;
         } catch (error) {
@@ -49,6 +53,8 @@ export class CardController {
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteCard(@Param('uid') uid: string): Promise<void> {
         try {
+            uid = uid.toUpperCase();
+
             await this.cardService.deleteCard(uid);
         } catch (error) {
             if (error instanceof CardNotExistedException) {
@@ -66,6 +72,10 @@ export class CardController {
         @Body() payload: UpsertCardSectorDto,
     ): Promise<CardSector> {
         try {
+            uid = uid.toUpperCase();
+            payload.keyA = payload.keyA?.toUpperCase();
+            payload.keyB = payload.keyB?.toUpperCase();
+
             const cardSector = await this.cardService.upsertCardSector(
                 uid,
                 sectorIndex,
