@@ -8,7 +8,9 @@ import {
     NotFoundException,
     Param,
     Put,
+    UseGuards,
 } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { Card, CardSector } from '@prisma/client';
 import { CardService } from './card.service';
 import { UpsertCardSectorDto } from './dto/upsert-card-sector.dto';
@@ -34,6 +36,7 @@ export class CardController {
     }
 
     @Get(':uid')
+    @UseGuards(ThrottlerGuard)
     async findCard(@Param('uid') uid: string) {
         try {
             uid = uid.toUpperCase();
