@@ -102,7 +102,7 @@ export class NfcService {
                 continue;
             }
 
-            let points = block44[4] - block46[0];
+            const points = block44[4] - block46[0];
             console.log(`KuoKuangPoints: ${points}`);
             return points;
         }

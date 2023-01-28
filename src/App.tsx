@@ -66,14 +66,18 @@ const App = () => {
                 const balance = await nfcService.readCardBalance(sector2KeyA);
                 setCardBalance(balance);
 
-                const sector11KeyA = card.sectors.find(
-                    (s) => s.index === 11,
-                )?.keyA;
-                if (sector11KeyA) {
-                    const kuoKuangPoints =
-                        await nfcService.readCardKuoKuangPoints(sector11KeyA);
-                    setCardKuoKuangPoints(kuoKuangPoints);
-                    setIsKuoKuangCard(true);
+                if (card.tags.includes('KuoKuangCard')) {
+                    const sector11KeyA = card.sectors.find(
+                        (s) => s.index === 11,
+                    )?.keyA;
+                    if (sector11KeyA) {
+                        const kuoKuangPoints =
+                            await nfcService.readCardKuoKuangPoints(
+                                sector11KeyA,
+                            );
+                        setCardKuoKuangPoints(kuoKuangPoints);
+                        setIsKuoKuangCard(true);
+                    }
                 }
 
                 setIsShowingResult(true);

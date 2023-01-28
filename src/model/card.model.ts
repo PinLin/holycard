@@ -3,6 +3,7 @@ export interface Card {
     name: string;
     type: CardType;
     sectors: CardSector[];
+    tags: string[];
 }
 
 export enum CardType {
