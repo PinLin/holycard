@@ -1,4 +1,5 @@
 import { Module, ValidationPipe } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { APP_PIPE } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
@@ -13,6 +14,9 @@ import { PrismaModule } from './prisma/prisma.module';
         ThrottlerModule.forRoot({
             ttl: 20,
             limit: 10,
+        }),
+        ConfigModule.forRoot({
+            isGlobal: true,
         }),
     ],
     controllers: [AppController],
