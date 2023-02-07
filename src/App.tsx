@@ -10,59 +10,84 @@
 
 import { ProgressBar } from '@react-native-community/progress-bar-android';
 import React, { useState } from 'react';
-import { Image, Modal, StatusBar, Text, ToastAndroid, useColorScheme, View } from 'react-native';
+import {
+    Image,
+    Modal,
+    StatusBar,
+    Text,
+    ToastAndroid,
+    useColorScheme,
+    View,
+} from 'react-native';
 import { Card, CardType } from './model/card';
-import { nfcUtil } from './util/nfc';
+import { NfcService } from './service/nfc.service';
 
-nfcUtil.init();
+const nfcService = new NfcService();
+
+nfcService.init();
 
 const App = () => {
     const isDarkMode = useColorScheme() === 'dark';
     const [isReady, setIsReady] = useState(false);
-    const [isReading, setIsReading] = useState(false);
-    const [isShowing, setIsShowing] = useState(false);
+    const [isReadingCard, setIsReadingCard] = useState(false);
+    const [isShowingResult, setIsShowingResult] = useState(false);
     const [cardType, setCardType] = useState(CardType.Unknown);
     const [cardName, setCardName] = useState('');
     const [cardBalance, setCardBalance] = useState(0);
-    const [isShowKuoKuangPoints, setIsShowKuoKuangPoints] = useState(false);
+
+    const [isKuoKuangCard, setIsKuoKuangCard] = useState(false);
     const [cardKuoKuangPoints, setCardKuoKuangPoints] = useState(0);
 
-    if (!isReady) {
-        nfcUtil.requestMifareClassic(async () => {
-            setIsReading(true);
+    async function readCard() {
+        setIsReady(true);
 
-            const uid = await nfcUtil.getCardUid();
-            const response = await fetch(`https://card.pinlin.me/card/${uid}`);
-            if (!response.ok) {
-                throw "卡片未註冊";
-            }
-            const card = (await response.json()) as Card;
-            setCardName(card.name);
-            setCardType(card.type);
+        try {
+            await nfcService.requestMifareClassic(async () => {
+                setIsReadingCard(true);
 
-            const key2A = card.keys.find(key => key.type.toLowerCase() == '2a');
-            if (!key2A) {
-                throw "卡片未註冊";
-            }
-            setCardBalance(await nfcUtil.getCardBalance(nfcUtil.convertKey(key2A.key)));
+                const uid = await nfcService.readCardUid();
+                const response = await fetch(
+                    `https://card.pinlin.me/card/${uid}`,
+                );
+                if (!response.ok) {
+                    throw '查無卡片資料';
+                }
 
-            const key11A = card.keys.find(key => key.type.toLowerCase() == '11a');
-            if (key11A) {
-                setCardKuoKuangPoints(await nfcUtil.getCardKuoKuangPoints(nfcUtil.convertKey(key11A.key)));
-                setIsShowKuoKuangPoints(true);
-            } else {
-                setIsShowKuoKuangPoints(false);
-            }
+                const card: Card = await response.json();
+                setCardName(card.name);
+                setCardType(card.type);
 
-            setIsShowing(true);
-        }).catch((e) => {
-            ToastAndroid.show(`${e}`, ToastAndroid.SHORT);
+                const sector2KeyA = card.keys.find(
+                    (key) => key.type.toLowerCase() == '2a',
+                )?.key;
+                if (!sector2KeyA) {
+                    throw '無法讀取餘額';
+                }
+                const balance = await nfcService.readCardBalance(sector2KeyA);
+                setCardBalance(balance);
+
+                const sector11KeyA = card.keys.find(
+                    (key) => key.type.toLowerCase() == '11a',
+                )?.key;
+                if (sector11KeyA) {
+                    const kuoKuangPoints =
+                        await nfcService.readCardKuoKuangPoints(sector11KeyA);
+                    setCardKuoKuangPoints(kuoKuangPoints);
+                    setIsKuoKuangCard(true);
+                }
+
+                setIsShowingResult(true);
+            });
+        } catch (err) {
+            ToastAndroid.show(`${err}`, ToastAndroid.SHORT);
 
             setIsReady(false);
-            setIsReading(false);
-        });
+            setIsReadingCard(false);
+        }
+    }
 
-        setIsReady(true);
+    if (!isReady) {
+        readCard();
     }
 
     return (
@@ -85,19 +110,17 @@ const App = () => {
                         fontWeight: '600',
                         color: isDarkMode ? 'white' : 'black',
                     }}
-                >HolyCard</Text>
+                >
+                    HolyCard
+                </Text>
                 <View
                     style={{
                         flex: 1,
                         justifyContent: 'center',
                     }}
                 >
-                    {
-                        isReading &&
-                        <ProgressBar />
-                    }
-                    {
-                        !isReading &&
+                    {isReadingCard && <ProgressBar />}
+                    {!isReadingCard && (
                         <Text
                             style={{
                                 textAlign: 'center',
@@ -105,18 +128,21 @@ const App = () => {
                                 fontWeight: '400',
                                 color: isDarkMode ? 'white' : 'black',
                             }}
-                        >請感應卡片</Text>
-                    }
+                        >
+                            請感應卡片
+                        </Text>
+                    )}
                 </View>
             </View>
             <Modal
-                animationType='slide'
+                animationType="slide"
                 transparent={true}
-                visible={isShowing}
+                visible={isShowingResult}
                 onRequestClose={() => {
                     setIsReady(false);
-                    setIsReading(false);
-                    setIsShowing(false);
+                    setIsReadingCard(false);
+                    setIsShowingResult(false);
+                    setIsKuoKuangCard(false);
                 }}
             >
                 <View
@@ -140,10 +166,13 @@ const App = () => {
                     >
                         <Image
                             source={
-                                cardType == CardType.IPass ? require('./image/ipass.png') :
-                                    cardType == CardType.EasyCard ? require('./image/easycard.png') :
-                                        cardType == CardType.HappyCash ? require('./image/happycash.png') :
-                                            require('./image/unknown.png')
+                                cardType == CardType.IPass
+                                    ? require('./image/ipass.png')
+                                    : cardType == CardType.EasyCard
+                                    ? require('./image/easycard.png')
+                                    : cardType == CardType.HappyCash
+                                    ? require('./image/happycash.png')
+                                    : require('./image/unknown.png')
                             }
                         />
                         <Text
@@ -154,7 +183,9 @@ const App = () => {
                                 fontWeight: '400',
                                 color: isDarkMode ? 'white' : 'black',
                             }}
-                        >{cardName}</Text>
+                        >
+                            {cardName}
+                        </Text>
                         <Text
                             style={{
                                 marginTop: 30,
@@ -163,9 +194,10 @@ const App = () => {
                                 fontWeight: '400',
                                 color: isDarkMode ? 'white' : 'black',
                             }}
-                        >卡片餘額：{cardBalance} 元</Text>
-                        {
-                            isShowKuoKuangPoints &&
+                        >
+                            卡片餘額：{cardBalance} 元
+                        </Text>
+                        {isKuoKuangCard && (
                             <Text
                                 style={{
                                     textAlign: 'center',
@@ -173,8 +205,10 @@ const App = () => {
                                     fontWeight: '400',
                                     color: isDarkMode ? 'white' : 'black',
                                 }}
-                            >國光回數：{cardKuoKuangPoints} 點</Text>
-                        }
+                            >
+                                國光點數：{cardKuoKuangPoints} 點
+                            </Text>
+                        )}
                     </View>
                 </View>
             </Modal>
