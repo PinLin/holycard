@@ -77,6 +77,8 @@ const App = () => {
                             );
                         setCardKuoKuangPoints(kuoKuangPoints);
                         setIsKuoKuangCard(true);
+                    } else {
+                        ToastAndroid.show('缺少讀取國光點數所需的金鑰', ToastAndroid.SHORT);
                     }
                 }
 
