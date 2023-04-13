@@ -36,14 +36,12 @@ export class NfcService {
     }
 
     async readCardBalance(sector2KeyA: string): Promise<number> {
-        const key = this.convertKey(sector2KeyA);
-
         // 如果讀取失敗就重試，至多十次
         for (let i = 0; i < 10; i++) {
             try {
                 await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(
                     2,
-                    key,
+                    this.convertKey(sector2KeyA),
                 );
             } catch {
                 continue;
@@ -73,14 +71,12 @@ export class NfcService {
     }
 
     async readCardKuoKuangPoints(sector11KeyA: string): Promise<number> {
-        const key = this.convertKey(sector11KeyA);
-
         // 如果讀取失敗就重試，至多十次
         for (let i = 0; i < 10; i++) {
             try {
                 await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(
                     11,
-                    key,
+                    this.convertKey(sector11KeyA),
                 );
             } catch {
                 continue;
@@ -105,6 +101,121 @@ export class NfcService {
             const points = block44[4] - block46[0];
             console.log(`KuoKuangPoints: ${points}`);
             return points;
+        }
+
+        throw new FailedToReadCardException();
+    }
+
+    async readAllPassInfo(
+        sector7KeyA: string,
+        sector8KeyA: string,
+    ): Promise<{ purchaseDateString: string | null; expiryDateString: string | null }> {
+        // 如果讀取失敗就重試，至多十次
+        for (let i = 0; i < 10; i++) {
+            try {
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(
+                    7,
+                    this.convertKey(sector7KeyA),
+                );
+            } catch {
+                continue;
+            }
+
+            const block28 =
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                    28 as any,
+                );
+            if (block28.length != 16) {
+                continue;
+            }
+
+            const block29 =
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                    29 as any,
+                );
+            if (block29.length != 16) {
+                continue;
+            }
+
+            const block30 =
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                    30 as any,
+                );
+            if (block30.length != 16) {
+                continue;
+            }
+
+            try {
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(
+                    8,
+                    this.convertKey(sector8KeyA),
+                );
+            } catch {
+                continue;
+            }
+
+            const block33 =
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                    33 as any,
+                );
+            if (block33.length != 16) {
+                continue;
+            }
+
+            const block34 =
+                await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                    34 as any,
+                );
+            if (block34.length != 16) {
+                continue;
+            }
+
+            let purchaseDateString = null;
+            let expiryDateString = null;
+
+            const parseDate = (data1: number, data2: number) => {
+                const year = Math.floor(data2 / 2) + 1980;
+                const month = Math.floor(data1 / 32) + (data2 % 2) * 8;
+                const day = data1 % 32;
+                return new Date(`${year}/${month}/${day}`);
+            };
+
+            if (block28[1] > 0 && block28[2] > 0) {
+                const purchaseDate = parseDate(block28[1], block28[2]);
+
+                const year = purchaseDate.getFullYear();
+                const month = (purchaseDate.getMonth() + 1).toString().padStart(2, '0');
+                const day = purchaseDate.getDate().toString().padStart(2, '0');
+                purchaseDateString = `${year}/${month}/${day}`;
+
+                let data1 = block29[1];
+                let data2 = block29[2];
+                if (block30[1] >= data1 && block30[2] >= data2) {
+                    data1 = block30[1];
+                    data2 = block30[2];
+                }
+                if (block33[1] >= data1 && block33[2] >= data2) {
+                    data1 = block33[1];
+                    data2 = block33[2];
+                }
+                if (block34[1] >= data1 && block34[2] >= data2) {
+                    data1 = block34[1];
+                    data2 = block34[2];
+                }
+                if (data1 >= block28[1] && data2 >= block28[2]) {
+                    const expiryDate = parseDate(block28[1], block28[2]);
+                    expiryDate.setDate(expiryDate.getDate() + 29);
+
+                    const year = expiryDate.getFullYear();
+                    const month = (expiryDate.getMonth() + 1).toString().padStart(2, '0');
+                    const day = expiryDate.getDate().toString().padStart(2, '0');
+                    expiryDateString = `${year}/${month}/${day}`;
+                }
+            }
+
+            console.log(`AllPassPurchaseDate: ${purchaseDateString}`);
+            console.log(`AllPassExpiryDate: ${expiryDateString}`);
+            return { purchaseDateString, expiryDateString };
         }
 
         throw new FailedToReadCardException();

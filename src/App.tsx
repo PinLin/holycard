@@ -38,6 +38,10 @@ const App = () => {
     const [isKuoKuangCard, setIsKuoKuangCard] = useState(false);
     const [cardKuoKuangPoints, setCardKuoKuangPoints] = useState(0);
 
+    const [isAllPassPurchased, setIsAllPassPurchased] = useState(false);
+    const [allPassPurchaseDate, setAllPassPurchaseDate] = useState('');
+    const [allPassExpiryDate, setAllPassExpiryDate] = useState('');
+
     async function readCard() {
         setIsReady(true);
 
@@ -78,7 +82,42 @@ const App = () => {
                         setCardKuoKuangPoints(kuoKuangPoints);
                         setIsKuoKuangCard(true);
                     } else {
-                        ToastAndroid.show('缺少讀取國光點數所需的金鑰', ToastAndroid.SHORT);
+                        ToastAndroid.show(
+                            '缺少讀取國光點數所需的金鑰',
+                            ToastAndroid.SHORT,
+                        );
+                    }
+                }
+
+                if (card.type === CardType.EASY_CARD) {
+                    const sector7KeyA = card.sectors.find(
+                        (s) => s.index === 7,
+                    )?.keyA;
+                    const sector8KeyA = card.sectors.find(
+                        (s) => s.index === 8,
+                    )?.keyA;
+                    if (sector7KeyA && sector8KeyA) {
+                        const { purchaseDateString: purchaseDate, expiryDateString: expiryDate } =
+                            await nfcService.readAllPassInfo(
+                                sector7KeyA,
+                                sector8KeyA,
+                            );
+                        if (purchaseDate) {
+                            setAllPassPurchaseDate(purchaseDate);
+                            if (expiryDate) {
+                                setAllPassExpiryDate(expiryDate);
+                            } else {
+                                setAllPassExpiryDate('未啟用');
+                            }
+                            setIsAllPassPurchased(true);
+                        } else {
+                            setAllPassPurchaseDate('未購買');
+                        }
+                    } else {
+                        ToastAndroid.show(
+                            '缺少讀取雙北定期票所需的金鑰',
+                            ToastAndroid.SHORT,
+                        );
                     }
                 }
 
@@ -149,6 +188,7 @@ const App = () => {
                     setIsReadingCard(false);
                     setIsShowingResult(false);
                     setIsKuoKuangCard(false);
+                    setIsAllPassPurchased(false);
                 }}
             >
                 <View
@@ -183,38 +223,159 @@ const App = () => {
                         />
                         <Text
                             style={{
-                                marginTop: 30,
+                                marginTop: 20,
                                 textAlign: 'center',
-                                fontSize: 24,
+                                fontSize: 26,
                                 fontWeight: '400',
                                 color: isDarkMode ? 'white' : 'black',
                             }}
                         >
                             {cardName}
                         </Text>
-                        <Text
+                        <View
                             style={{
-                                marginTop: 30,
-                                textAlign: 'center',
-                                fontSize: 24,
-                                fontWeight: '400',
-                                color: isDarkMode ? 'white' : 'black',
+                                marginTop: 20,
+                                justifyContent: 'center',
+                                alignItems: 'flex-start',
                             }}
                         >
-                            卡片餘額：{cardBalance} 元
-                        </Text>
-                        {isKuoKuangCard && (
-                            <Text
+                            <View
                                 style={{
-                                    textAlign: 'center',
-                                    fontSize: 24,
-                                    fontWeight: '400',
-                                    color: isDarkMode ? 'white' : 'black',
+                                    flexDirection: 'row',
                                 }}
                             >
-                                國光點數：{cardKuoKuangPoints} 點
-                            </Text>
-                        )}
+                                <Text
+                                    style={{
+                                        flex: 1,
+                                        fontSize: 20,
+                                        fontWeight: '400',
+                                        color: isDarkMode ? 'white' : 'black',
+                                    }}
+                                >
+                                    卡片餘額：
+                                </Text>
+                                <Text
+                                    style={{
+                                        fontSize: 20,
+                                        fontWeight: '400',
+                                        color: isDarkMode ? 'white' : 'black',
+                                    }}
+                                >
+                                    {cardBalance} 元
+                                </Text>
+                            </View>
+                            {isKuoKuangCard && (
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            flex: 1,
+                                            fontSize: 20,
+                                            fontWeight: '400',
+                                            color: isDarkMode
+                                                ? 'white'
+                                                : 'black',
+                                        }}
+                                    >
+                                        國光點數：
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontSize: 20,
+                                            fontWeight: '400',
+                                            color: isDarkMode
+                                                ? 'white'
+                                                : 'black',
+                                        }}
+                                    >
+                                        {cardKuoKuangPoints} 點
+                                    </Text>
+                                </View>
+                            )}
+                            {isAllPassPurchased && (
+                                <View
+                                    style={{
+                                        width: '100%',
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            marginTop: 20,
+                                            textAlign: 'center',
+                                            fontSize: 24,
+                                            fontWeight: '400',
+                                            color: isDarkMode
+                                                ? 'white'
+                                                : 'black',
+                                        }}
+                                    >
+                                        雙北定期票
+                                    </Text>
+                                    <View
+                                        style={{
+                                            marginTop: 5,
+                                            flexDirection: 'row',
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                flex: 1,
+                                                fontSize: 20,
+                                                fontWeight: '400',
+                                                color: isDarkMode
+                                                    ? 'white'
+                                                    : 'black',
+                                            }}
+                                        >
+                                            購買日期：
+                                        </Text>
+                                        <Text
+                                            style={{
+                                                fontSize: 20,
+                                                fontWeight: '400',
+                                                color: isDarkMode
+                                                    ? 'white'
+                                                    : 'black',
+                                            }}
+                                        >
+                                            {allPassPurchaseDate}
+                                        </Text>
+                                    </View>
+                                    <View
+                                        style={{
+                                            flexDirection: 'row',
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                flex: 1,
+                                                fontSize: 20,
+                                                fontWeight: '400',
+                                                color: isDarkMode
+                                                    ? 'white'
+                                                    : 'black',
+                                            }}
+                                        >
+                                            到期日期：
+                                        </Text>
+                                        <Text
+                                            style={{
+                                                fontSize: 20,
+                                                fontWeight: '400',
+                                                color: isDarkMode
+                                                    ? 'white'
+                                                    : 'black',
+                                            }}
+                                        >
+                                            {allPassExpiryDate}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
                     </View>
                 </View>
             </Modal>
