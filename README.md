@@ -6,6 +6,6 @@ My card balance reader.
 
 ## Demo
 
-| ![](https://imgur.com/wo8DS23.png) | ![](https://imgur.com/6QIdcYx.png) |
+| ![](https://imgur.com/Quioo7P.png) | ![](https://imgur.com/fAE208A.png) |
 | :--------------------------------: | :--------------------------------: |
-| ![](https://imgur.com/rgj82Tt.png) | ![](https://imgur.com/8tk6HdQ.png) |
+| ![](https://imgur.com/dvg7enl.png) | ![](https://imgur.com/yDQ0hxn.png) |
