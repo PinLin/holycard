@@ -203,7 +203,7 @@ export class NfcService {
                     data2 = block34[2];
                 }
                 if (data1 >= block28[1] && data2 >= block28[2]) {
-                    const expiryDate = parseDate(block28[1], block28[2]);
+                    const expiryDate = parseDate(data1, data2);
                     expiryDate.setDate(expiryDate.getDate() + 29);
 
                     const year = expiryDate.getFullYear();
