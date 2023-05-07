@@ -1,10 +1,8 @@
 # holycard
 
-My card balance reader.
+我的卡片餘額讀取器
 
-> Only for Android.
-
-## Demo
+> 但是只有 Android 版
 
 | ![](https://imgur.com/Quioo7P.png) | ![](https://imgur.com/fAE208A.png) |
 | :--------------------------------: | :--------------------------------: |
