@@ -210,6 +210,14 @@ export class NfcService {
                     const month = (expiryDate.getMonth() + 1).toString().padStart(2, '0');
                     const day = expiryDate.getDate().toString().padStart(2, '0');
                     expiryDateString = `${year}/${month}/${day}`;
+                } else if (data1 > 0 && data2 > 0) {
+                    const expiryDate = parseDate(data1, data2);
+                    expiryDate.setDate(expiryDate.getDate() + 59);
+
+                    const year = expiryDate.getFullYear();
+                    const month = (expiryDate.getMonth() + 1).toString().padStart(2, '0');
+                    const day = expiryDate.getDate().toString().padStart(2, '0');
+                    expiryDateString = `${year}/${month}/${day}`;
                 }
             }
 
