@@ -86,16 +86,11 @@ export class NfcService {
         return points;
     }
 
-    async readAllPassInfo(
-        sector7KeyA: string,
+    async readTPassInfo(
         sector8KeyA: string,
     ): Promise<{ purchaseDateString: string | null; expiryDateString: string | null }> {
-        await this.authenticateWithKeyA(7, sector7KeyA);
-        const block28 = await this.readBlock(28);
-        const block29 = await this.readBlock(29);
-        const block30 = await this.readBlock(30);
-
         await this.authenticateWithKeyA(8, sector8KeyA);
+        const block32 = await this.readBlock(32);
         const block33 = await this.readBlock(33);
         const block34 = await this.readBlock(34);
 
@@ -109,29 +104,21 @@ export class NfcService {
             return new Date(`${year}/${month}/${day}`);
         };
 
-        if (block28[1] > 0 && block28[2] > 0) {
-            const purchaseDate = parseDate(block28[1], block28[2]);
+        if (block32[1] > 0 && block32[2] > 0) {
+            const purchaseDate = parseDate(block32[1], block32[2]);
 
             const year = purchaseDate.getFullYear();
             const month = (purchaseDate.getMonth() + 1).toString().padStart(2, '0');
             const day = purchaseDate.getDate().toString().padStart(2, '0');
             purchaseDateString = `${year}/${month}/${day}`;
 
-            let data1 = block29[1];
-            let data2 = block29[2];
-            if (block30[1] >= data1 && block30[2] >= data2) {
-                data1 = block30[1];
-                data2 = block30[2];
-            }
-            if (block33[1] >= data1 && block33[2] >= data2) {
-                data1 = block33[1];
-                data2 = block33[2];
-            }
+            let data1 = block33[1];
+            let data2 = block33[2];
             if (block34[1] >= data1 && block34[2] >= data2) {
                 data1 = block34[1];
                 data2 = block34[2];
             }
-            if (data1 >= block28[1] && data2 >= block28[2]) {
+            if (data1 >= block32[1] && data2 >= block32[2]) {
                 const expiryDate = parseDate(data1, data2);
                 expiryDate.setDate(expiryDate.getDate() + 29);
 
@@ -150,8 +137,8 @@ export class NfcService {
             }
         }
 
-        console.log(`AllPassPurchaseDate: ${purchaseDateString}`);
-        console.log(`AllPassExpiryDate: ${expiryDateString}`);
+        console.log(`TPassPurchaseDate: ${purchaseDateString}`);
+        console.log(`TPassExpiryDate: ${expiryDateString}`);
         return { purchaseDateString, expiryDateString };
     }
 }

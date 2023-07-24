@@ -38,9 +38,9 @@ const App = () => {
     const [isKuoKuangCard, setIsKuoKuangCard] = useState(false);
     const [cardKuoKuangPoints, setCardKuoKuangPoints] = useState(0);
 
-    const [isAllPassPurchased, setIsAllPassPurchased] = useState(false);
-    const [allPassPurchaseDate, setAllPassPurchaseDate] = useState('');
-    const [allPassExpiryDate, setAllPassExpiryDate] = useState('');
+    const [isTPassPurchased, setIsTPassPurchased] = useState(false);
+    const [tPassPurchaseDate, setTPassPurchaseDate] = useState('');
+    const [tPassExpiryDate, setTPassExpiryDate] = useState('');
 
     async function readCard() {
         setIsReady(true);
@@ -97,24 +97,23 @@ const App = () => {
                     )?.keyA;
                     if (sector7KeyA && sector8KeyA) {
                         const { purchaseDateString: purchaseDate, expiryDateString: expiryDate } =
-                            await nfcService.readAllPassInfo(
-                                sector7KeyA,
+                            await nfcService.readTPassInfo(
                                 sector8KeyA,
                             );
                         if (purchaseDate) {
-                            setAllPassPurchaseDate(purchaseDate);
+                            setTPassPurchaseDate(purchaseDate);
                             if (expiryDate) {
-                                setAllPassExpiryDate(expiryDate);
+                                setTPassExpiryDate(expiryDate);
                             } else {
-                                setAllPassExpiryDate('未啟用');
+                                setTPassExpiryDate('未啟用');
                             }
-                            setIsAllPassPurchased(true);
+                            setIsTPassPurchased(true);
                         } else {
-                            setAllPassPurchaseDate('未購買');
+                            setTPassPurchaseDate('未購買');
                         }
                     } else {
                         ToastAndroid.show(
-                            '缺少讀取雙北定期票所需的金鑰',
+                            '缺少讀取通勤月票資訊所需的金鑰',
                             ToastAndroid.SHORT,
                         );
                     }
@@ -187,7 +186,7 @@ const App = () => {
                     setIsReadingCard(false);
                     setIsShowingResult(false);
                     setIsKuoKuangCard(false);
-                    setIsAllPassPurchased(false);
+                    setIsTPassPurchased(false);
                 }}
             >
                 <View
@@ -294,7 +293,7 @@ const App = () => {
                                     </Text>
                                 </View>
                             )}
-                            {isAllPassPurchased && (
+                            {isTPassPurchased && (
                                 <View
                                     style={{
                                         width: '100%',
@@ -311,7 +310,7 @@ const App = () => {
                                                 : 'black',
                                         }}
                                     >
-                                        雙北定期票
+                                        基北北桃通勤月票
                                     </Text>
                                     <View
                                         style={{
@@ -340,7 +339,7 @@ const App = () => {
                                                     : 'black',
                                             }}
                                         >
-                                            {allPassPurchaseDate}
+                                            {tPassPurchaseDate}
                                         </Text>
                                     </View>
                                     <View
@@ -369,7 +368,7 @@ const App = () => {
                                                     : 'black',
                                             }}
                                         >
-                                            {allPassExpiryDate}
+                                            {tPassExpiryDate}
                                         </Text>
                                     </View>
                                 </View>
