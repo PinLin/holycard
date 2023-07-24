@@ -46,10 +46,9 @@ const App = () => {
         setIsReady(true);
 
         try {
-            await nfcService.requestMifareClassic(async () => {
+            await nfcService.requestMifareClassic(async (uid: string) => {
                 setIsReadingCard(true);
 
-                const uid = await nfcService.readCardUid();
                 const response = await fetch(
                     `https://holycard.pinlin.me/card/${uid}`,
                 );
