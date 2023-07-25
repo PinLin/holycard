@@ -24,8 +24,6 @@ import { NfcService } from './service/nfc.service';
 
 const nfcService = new NfcService();
 
-nfcService.init();
-
 const App = () => {
     const isDarkMode = useColorScheme() === 'dark';
     const [isReady, setIsReady] = useState(false);

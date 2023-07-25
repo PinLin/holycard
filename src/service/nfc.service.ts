@@ -2,8 +2,8 @@ import nfcManager, { NfcTech } from 'react-native-nfc-manager';
 import { FailedToReadCardException } from '../exception/failed-to-read-card.exception';
 
 export class NfcService {
-    async init() {
-        await nfcManager.start();
+    constructor() {
+        nfcManager.start();
     }
 
     async requestMifareClassic(handler: (uid: string) => any): Promise<void> {
