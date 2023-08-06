@@ -11,8 +11,6 @@
 import { ProgressBar } from '@react-native-community/progress-bar-android';
 import React, { useState } from 'react';
 import {
-    Image,
-    Modal,
     StatusBar,
     Text,
     ToastAndroid,
@@ -21,6 +19,7 @@ import {
 } from 'react-native';
 import { Card, CardType } from './model/card.model';
 import { NfcService } from './service/nfc.service';
+import { ResultModal } from './components/ResultModal';
 
 const nfcService = new NfcService();
 
@@ -29,13 +28,12 @@ const App = () => {
     const [isReady, setIsReady] = useState(false);
     const [isReadingCard, setIsReadingCard] = useState(false);
     const [isShowingResult, setIsShowingResult] = useState(false);
+
     const [cardType, setCardType] = useState(CardType.UNKNOWN);
     const [cardName, setCardName] = useState('');
     const [cardBalance, setCardBalance] = useState(0);
-
     const [isKuoKuangCard, setIsKuoKuangCard] = useState(false);
     const [cardKuoKuangPoints, setCardKuoKuangPoints] = useState(0);
-
     const [isTPassPurchased, setIsTPassPurchased] = useState(false);
     const [tPassPurchaseDate, setTPassPurchaseDate] = useState('');
     const [tPassExpiryDate, setTPassExpiryDate] = useState('');
@@ -106,8 +104,6 @@ const App = () => {
                                 setTPassExpiryDate('未啟用');
                             }
                             setIsTPassPurchased(true);
-                        } else {
-                            setTPassPurchaseDate('未購買');
                         }
                     } else {
                         ToastAndroid.show(
@@ -175,206 +171,25 @@ const App = () => {
                     )}
                 </View>
             </View>
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={isShowingResult}
-                onRequestClose={() => {
-                    setIsReady(false);
-                    setIsReadingCard(false);
-                    setIsShowingResult(false);
-                    setIsKuoKuangCard(false);
-                    setIsTPassPurchased(false);
-                }}
-            >
-                <View
-                    style={{
-                        flex: 1,
-                        justifyContent: 'center',
-                        alignItems: 'center',
+            {isShowingResult && (
+                <ResultModal
+                    cardType={cardType}
+                    cardName={cardName}
+                    cardBalance={cardBalance}
+                    isKuoKuangCard={isKuoKuangCard}
+                    cardKuoKuangPoints={cardKuoKuangPoints}
+                    isTPassPurchased={isTPassPurchased}
+                    tPassPurchaseDate={tPassPurchaseDate}
+                    tPassExpiryDate={tPassExpiryDate}
+                    onRequestClose={() => {
+                        setIsReady(false);
+                        setIsReadingCard(false);
+                        setIsShowingResult(false);
+                        setIsKuoKuangCard(false);
+                        setIsTPassPurchased(false);
                     }}
-                >
-                    <View
-                        style={{
-                            margin: 20,
-                            backgroundColor: isDarkMode ? '#303030' : '#FAFAFA',
-                            borderRadius: 10,
-                            paddingHorizontal: 30,
-                            paddingVertical: 50,
-                            shadowColor: isDarkMode ? 'white' : 'black',
-                            shadowRadius: 2,
-                            elevation: 5,
-                        }}
-                    >
-                        <Image
-                            source={
-                                cardType == CardType.I_PASS
-                                    ? require('./image/ipass.png')
-                                    : cardType == CardType.EASY_CARD
-                                    ? require('./image/easycard.png')
-                                    : cardType == CardType.HAPPY_CASH
-                                    ? require('./image/happycash.png')
-                                    : require('./image/unknown.png')
-                            }
-                        />
-                        <Text
-                            style={{
-                                marginTop: 20,
-                                textAlign: 'center',
-                                fontSize: 26,
-                                fontWeight: '400',
-                                color: isDarkMode ? 'white' : 'black',
-                            }}
-                        >
-                            {cardName}
-                        </Text>
-                        <View
-                            style={{
-                                marginTop: 20,
-                                justifyContent: 'center',
-                                alignItems: 'flex-start',
-                            }}
-                        >
-                            <View
-                                style={{
-                                    flexDirection: 'row',
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        flex: 1,
-                                        fontSize: 20,
-                                        fontWeight: '400',
-                                        color: isDarkMode ? 'white' : 'black',
-                                    }}
-                                >
-                                    卡片餘額：
-                                </Text>
-                                <Text
-                                    style={{
-                                        fontSize: 20,
-                                        fontWeight: '400',
-                                        color: isDarkMode ? 'white' : 'black',
-                                    }}
-                                >
-                                    {cardBalance} 元
-                                </Text>
-                            </View>
-                            {isKuoKuangCard && (
-                                <View
-                                    style={{
-                                        flexDirection: 'row',
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            flex: 1,
-                                            fontSize: 20,
-                                            fontWeight: '400',
-                                            color: isDarkMode
-                                                ? 'white'
-                                                : 'black',
-                                        }}
-                                    >
-                                        國光點數：
-                                    </Text>
-                                    <Text
-                                        style={{
-                                            fontSize: 20,
-                                            fontWeight: '400',
-                                            color: isDarkMode
-                                                ? 'white'
-                                                : 'black',
-                                        }}
-                                    >
-                                        {cardKuoKuangPoints} 點
-                                    </Text>
-                                </View>
-                            )}
-                            {isTPassPurchased && (
-                                <View
-                                    style={{
-                                        width: '100%',
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            marginTop: 20,
-                                            textAlign: 'center',
-                                            fontSize: 24,
-                                            fontWeight: '400',
-                                            color: isDarkMode
-                                                ? 'white'
-                                                : 'black',
-                                        }}
-                                    >
-                                        基北北桃通勤月票
-                                    </Text>
-                                    <View
-                                        style={{
-                                            marginTop: 5,
-                                            flexDirection: 'row',
-                                        }}
-                                    >
-                                        <Text
-                                            style={{
-                                                flex: 1,
-                                                fontSize: 20,
-                                                fontWeight: '400',
-                                                color: isDarkMode
-                                                    ? 'white'
-                                                    : 'black',
-                                            }}
-                                        >
-                                            購買日期：
-                                        </Text>
-                                        <Text
-                                            style={{
-                                                fontSize: 20,
-                                                fontWeight: '400',
-                                                color: isDarkMode
-                                                    ? 'white'
-                                                    : 'black',
-                                            }}
-                                        >
-                                            {tPassPurchaseDate}
-                                        </Text>
-                                    </View>
-                                    <View
-                                        style={{
-                                            flexDirection: 'row',
-                                        }}
-                                    >
-                                        <Text
-                                            style={{
-                                                flex: 1,
-                                                fontSize: 20,
-                                                fontWeight: '400',
-                                                color: isDarkMode
-                                                    ? 'white'
-                                                    : 'black',
-                                            }}
-                                        >
-                                            到期日期：
-                                        </Text>
-                                        <Text
-                                            style={{
-                                                fontSize: 20,
-                                                fontWeight: '400',
-                                                color: isDarkMode
-                                                    ? 'white'
-                                                    : 'black',
-                                            }}
-                                        >
-                                            {tPassExpiryDate}
-                                        </Text>
-                                    </View>
-                                </View>
-                            )}
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+                />
+            )}
         </>
     );
 };
