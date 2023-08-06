@@ -65,17 +65,33 @@ const App = () => {
                 const balance = await nfcService.readCardBalance(sector2KeyA);
                 setCardBalance(balance);
 
-                if (card.tags.includes('KuoKuangCard')) {
+                // 國光回數票悠遊卡
+                if (
+                    card.tags.includes('KuoKuangCard') &&
+                    card.type === CardType.EASY_CARD
+                ) {
                     const sector11KeyA = card.sectors.find(
                         (s) => s.index === 11,
                     )?.keyA;
                     if (sector11KeyA) {
-                        const kuoKuangPoints =
-                            await nfcService.readCardKuoKuangPoints(
-                                sector11KeyA,
-                            );
-                        setCardKuoKuangPoints(kuoKuangPoints);
-                        setIsKuoKuangCard(true);
+                        try {
+                            const kuoKuangPoints =
+                                await nfcService.readCardKuoKuangPoints(
+                                    sector11KeyA,
+                                );
+                            setCardKuoKuangPoints(kuoKuangPoints);
+                            setIsKuoKuangCard(true);
+                        } catch (err) {
+                            if (
+                                (err as any).message ===
+                                'mifareClassicAuthenticate fail: AUTH_FAIL'
+                            ) {
+                                ToastAndroid.show(
+                                    '讀取國光點數所需的金鑰 11A 無效',
+                                    ToastAndroid.SHORT,
+                                );
+                            }
+                        }
                     } else {
                         ToastAndroid.show(
                             '缺少讀取國光點數所需的金鑰 11A',
@@ -84,7 +100,11 @@ const App = () => {
                     }
                 }
 
-                if (card.type === CardType.EASY_CARD) {
+                // TPASS 通勤月票悠遊卡（不支援國光回數票悠遊卡）
+                if (
+                    card.type === CardType.EASY_CARD &&
+                    !card.tags.includes('KuoKuangCard')
+                ) {
                     const sector3KeyA = card.sectors.find(
                         (s) => s.index === 3,
                     )?.keyA;
@@ -92,23 +112,37 @@ const App = () => {
                         (s) => s.index === 8,
                     )?.keyA;
                     if (sector3KeyA && sector8KeyA) {
-                        const { purchaseDateString: purchaseDate, expiryDateString: expiryDate } =
-                            await nfcService.readTPassInfo(
+                        try {
+                            const {
+                                purchaseDateString: purchaseDate,
+                                expiryDateString: expiryDate,
+                            } = await nfcService.readTPassInfo(
                                 sector3KeyA,
                                 sector8KeyA,
                             );
-                        if (purchaseDate) {
-                            setTPassPurchaseDate(purchaseDate);
-                            if (expiryDate) {
-                                setTPassExpiryDate(expiryDate);
-                            } else {
-                                setTPassExpiryDate('未啟用');
+                            if (purchaseDate) {
+                                setTPassPurchaseDate(purchaseDate);
+                                if (expiryDate) {
+                                    setTPassExpiryDate(expiryDate);
+                                } else {
+                                    setTPassExpiryDate('未啟用');
+                                }
+                                setIsTPassPurchased(true);
                             }
-                            setIsTPassPurchased(true);
+                        } catch (err) {
+                            if (
+                                (err as any).message ===
+                                'mifareClassicAuthenticate fail: AUTH_FAIL'
+                            ) {
+                                ToastAndroid.show(
+                                    '讀取通勤月票資訊所需的金鑰 3A 或 8A 無效',
+                                    ToastAndroid.SHORT,
+                                );
+                            }
                         }
                     } else {
                         ToastAndroid.show(
-                            '缺少讀取通勤月票資訊所需的金鑰 3A 及 8A',
+                            '缺少讀取通勤月票資訊所需的金鑰 3A 或 8A',
                             ToastAndroid.SHORT,
                         );
                     }
