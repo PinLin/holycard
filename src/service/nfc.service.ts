@@ -87,13 +87,9 @@ export class NfcService {
     }
 
     async readTPassInfo(
+        sector3KeyA: string,
         sector8KeyA: string,
     ): Promise<{ purchaseDateString: string | null; expiryDateString: string | null }> {
-        await this.authenticateWithKeyA(8, sector8KeyA);
-        const block32 = await this.readBlock(32);
-        const block33 = await this.readBlock(33);
-        const block34 = await this.readBlock(34);
-
         let purchaseDateString = null;
         let expiryDateString = null;
 
@@ -104,6 +100,9 @@ export class NfcService {
             return new Date(`${year}/${month}/${day}`);
         };
 
+        await this.authenticateWithKeyA(8, sector8KeyA);
+        const block32 = await this.readBlock(32);
+
         if (block32[1] > 0 && block32[2] > 0) {
             const purchaseDate = parseDate(block32[1], block32[2]);
 
@@ -112,23 +111,12 @@ export class NfcService {
             const day = purchaseDate.getDate().toString().padStart(2, '0');
             purchaseDateString = `${year}/${month}/${day}`;
 
-            let data1 = block33[1];
-            let data2 = block33[2];
-            if (block34[1] >= data1 && block34[2] >= data2) {
-                data1 = block34[1];
-                data2 = block34[2];
-            }
-            if (data1 >= block32[1] && data2 >= block32[2]) {
-                const expiryDate = parseDate(data1, data2);
-                expiryDate.setDate(expiryDate.getDate() + 29);
+            await this.authenticateWithKeyA(3, sector3KeyA);
+            const block12 = await this.readBlock(12);
 
-                const year = expiryDate.getFullYear();
-                const month = (expiryDate.getMonth() + 1).toString().padStart(2, '0');
-                const day = expiryDate.getDate().toString().padStart(2, '0');
-                expiryDateString = `${year}/${month}/${day}`;
-            } else if (data1 > 0 && data2 > 0) {
-                const expiryDate = parseDate(data1, data2);
-                expiryDate.setDate(expiryDate.getDate() + 59);
+            if (block12[14] > 0 && block12[15] > 0) {
+                const expiryDate = parseDate(block12[14], block12[15]);
+                expiryDate.setDate(expiryDate.getDate());
 
                 const year = expiryDate.getFullYear();
                 const month = (expiryDate.getMonth() + 1).toString().padStart(2, '0');

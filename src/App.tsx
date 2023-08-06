@@ -60,7 +60,7 @@ const App = () => {
                     (s) => s.index === 2,
                 )?.keyA;
                 if (!sector2KeyA) {
-                    throw '無法讀取餘額';
+                    throw '缺少讀取餘額所需的金鑰 2A';
                 }
                 const balance = await nfcService.readCardBalance(sector2KeyA);
                 setCardBalance(balance);
@@ -78,22 +78,23 @@ const App = () => {
                         setIsKuoKuangCard(true);
                     } else {
                         ToastAndroid.show(
-                            '缺少讀取國光點數所需的金鑰',
+                            '缺少讀取國光點數所需的金鑰 11A',
                             ToastAndroid.SHORT,
                         );
                     }
                 }
 
                 if (card.type === CardType.EASY_CARD) {
-                    const sector7KeyA = card.sectors.find(
-                        (s) => s.index === 7,
+                    const sector3KeyA = card.sectors.find(
+                        (s) => s.index === 3,
                     )?.keyA;
                     const sector8KeyA = card.sectors.find(
                         (s) => s.index === 8,
                     )?.keyA;
-                    if (sector7KeyA && sector8KeyA) {
+                    if (sector3KeyA && sector8KeyA) {
                         const { purchaseDateString: purchaseDate, expiryDateString: expiryDate } =
                             await nfcService.readTPassInfo(
+                                sector3KeyA,
                                 sector8KeyA,
                             );
                         if (purchaseDate) {
@@ -107,7 +108,7 @@ const App = () => {
                         }
                     } else {
                         ToastAndroid.show(
-                            '缺少讀取通勤月票資訊所需的金鑰',
+                            '缺少讀取通勤月票資訊所需的金鑰 3A 及 8A',
                             ToastAndroid.SHORT,
                         );
                     }
