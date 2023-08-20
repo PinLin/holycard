@@ -49,7 +49,10 @@ const App = () => {
                     `https://holycard.pinlin.me/card/${uid}`,
                 );
                 if (!response.ok) {
-                    throw '查無卡片資料';
+                    ToastAndroid.show('查無卡片資料', ToastAndroid.SHORT);
+                    setIsReady(false);
+                    setIsReadingCard(false);
+                    return;
                 }
 
                 const card: Card = await response.json();
@@ -60,7 +63,13 @@ const App = () => {
                     (s) => s.index === 2,
                 )?.keyA;
                 if (!sector2KeyA) {
-                    throw '缺少讀取餘額所需的金鑰 2A';
+                    ToastAndroid.show(
+                        '缺少讀取餘額所需的金鑰 2A',
+                        ToastAndroid.SHORT,
+                    );
+                    setIsReady(false);
+                    setIsReadingCard(false);
+                    return;
                 }
                 const balance = await nfcService.readCardBalance(sector2KeyA);
                 setCardBalance(balance);
