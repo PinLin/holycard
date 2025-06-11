@@ -23,7 +23,7 @@ import { ResultModal } from './components/ResultModal';
 
 const nfcService = new NfcService();
 
-const App = () => {
+function App(): React.JSX.Element {
     const isDarkMode = useColorScheme() === 'dark';
     const [isReady, setIsReady] = useState(false);
     const [isReadingCard, setIsReadingCard] = useState(false);
@@ -236,6 +236,6 @@ const App = () => {
             )}
         </>
     );
-};
+}
 
 export default App;
