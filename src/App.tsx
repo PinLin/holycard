@@ -8,7 +8,6 @@
  * @format
  */
 
-import { ProgressBar } from '@react-native-community/progress-bar-android';
 import React, { useState } from 'react';
 import {
     StatusBar,
@@ -200,7 +199,18 @@ function App(): React.JSX.Element {
                         justifyContent: 'center',
                     }}
                 >
-                    {isReadingCard && <ProgressBar />}
+                    {isReadingCard && (
+                        <Text
+                            style={{
+                                textAlign: 'center',
+                                fontSize: 24,
+                                fontWeight: '400',
+                                color: isDarkMode ? 'white' : 'black',
+                            }}
+                        >
+                            正在讀取卡片...
+                        </Text>
+                    )}
                     {!isReadingCard && (
                         <Text
                             style={{
