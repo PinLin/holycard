@@ -46,7 +46,7 @@ const App = () => {
                 setIsReadingCard(true);
 
                 const response = await fetch(
-                    `https://holycard.pinlin.me/card/${uid}`,
+                    `https://card.pinlin.me/card/${uid}`,
                 );
                 if (!response.ok) {
                     ToastAndroid.show('查無卡片資料', ToastAndroid.SHORT);
