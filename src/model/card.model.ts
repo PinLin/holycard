@@ -1,9 +1,10 @@
 export interface Card {
     uid: string;
-    name: string;
     type: CardType;
+    number: string;
+    nickname: string;
+    is_kuokuang_card: boolean;
     sectors: CardSector[];
-    tags: string[];
 }
 
 export enum CardType {

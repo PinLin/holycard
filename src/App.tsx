@@ -10,7 +10,9 @@
 
 import React, { useState } from 'react';
 import {
+    Modal,
     StatusBar,
+    StyleSheet,
     Text,
     ToastAndroid,
     useColorScheme,
@@ -18,28 +20,35 @@ import {
 } from 'react-native';
 import { Card, CardType } from './model/card.model';
 import { NfcService } from './service/nfc.service';
-import { ResultModal } from './components/ResultModal';
+import { Result } from './components/Result';
+import { getDateString } from './utils';
+import { MissingNecessaryKeysException } from './exception/missing-necessary-keys.exception';
+import { InvalidKeysException } from './exception/invalid-keys.exception';
 
 const nfcService = new NfcService();
 
 function App(): React.JSX.Element {
-    const isDarkMode = useColorScheme() === 'dark';
+    const colorScheme = useColorScheme() ?? 'light';
+    const styles = colorScheme === 'light' ? lightThemeStyles : darkThemeStyles;
+
     const [isReady, setIsReady] = useState(false);
     const [isReadingCard, setIsReadingCard] = useState(false);
-    const [isShowingResult, setIsShowingResult] = useState(false);
-
-    const [cardType, setCardType] = useState(CardType.UNKNOWN);
-    const [cardName, setCardName] = useState('');
-    const [cardBalance, setCardBalance] = useState(0);
-    const [isKuoKuangCard, setIsKuoKuangCard] = useState(false);
-    const [cardKuoKuangPoints, setCardKuoKuangPoints] = useState(0);
-    const [isTPassPurchased, setIsTPassPurchased] = useState(false);
-    const [tPassPurchaseDate, setTPassPurchaseDate] = useState('');
-    const [tPassExpiryDate, setTPassExpiryDate] = useState('');
+    const [isShowingResultModal, setIsShowingResultModal] = useState(false);
+    const [currentCard, setCurrentCard] = useState<Card>({
+        uid: '',
+        type: CardType.UNKNOWN,
+        number: '',
+        nickname: '',
+        is_kuokuang_card: false,
+        sectors: [],
+    });
+    const [balance, setBalance] = useState(0);
+    const [kuoKuangPoints, setKuoKuangPoints] = useState(0);
+    const [isTpassPurchased, setIsTpassPurchased] = useState(false);
+    const [tpassPurchaseDate, setTpassPurchaseDate] = useState('');
+    const [tpassExpiryDate, setTpassExpiryDate] = useState('');
 
     async function readCard() {
-        setIsReady(true);
-
         try {
             await nfcService.requestMifareClassic(async (uid: string) => {
                 setIsReadingCard(true);
@@ -53,110 +62,72 @@ function App(): React.JSX.Element {
                     setIsReadingCard(false);
                     return;
                 }
-
                 const card: Card = await response.json();
-                setCardName(card.name);
-                setCardType(card.type);
+                setCurrentCard(card);
 
-                const sector2KeyA = card.sectors.find(
-                    (s) => s.index === 2,
-                )?.keyA;
-                if (!sector2KeyA) {
-                    ToastAndroid.show(
-                        '缺少讀取餘額所需的金鑰 2A',
-                        ToastAndroid.SHORT,
-                    );
+                try {
+                    setBalance(await nfcService.readBalance(card));
+                } catch (err) {
+                    let errorMessage = '發生未知的錯誤';
+                    if (err instanceof MissingNecessaryKeysException) {
+                        errorMessage = '缺少讀取餘額所需的金鑰 2A';
+                    } else if (err instanceof InvalidKeysException) {
+                        errorMessage = '讀取餘額所需的金鑰 2A 無效';
+                    }
+                    ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
                     setIsReady(false);
                     setIsReadingCard(false);
                     return;
                 }
-                const balance = await nfcService.readCardBalance(sector2KeyA);
-                setCardBalance(balance);
 
                 // 國光回數票悠遊卡
-                if (
-                    card.tags.includes('KuoKuangCard') &&
-                    card.type === CardType.EASY_CARD
-                ) {
-                    const sector11KeyA = card.sectors.find(
-                        (s) => s.index === 11,
-                    )?.keyA;
-                    if (sector11KeyA) {
-                        try {
-                            const kuoKuangPoints =
-                                await nfcService.readCardKuoKuangPoints(
-                                    sector11KeyA,
-                                );
-                            setCardKuoKuangPoints(kuoKuangPoints);
-                            setIsKuoKuangCard(true);
-                        } catch (err) {
-                            if (
-                                (err as any).message ===
-                                'mifareClassicAuthenticate fail: AUTH_FAIL'
-                            ) {
-                                ToastAndroid.show(
-                                    '讀取國光點數所需的金鑰 11A 無效',
-                                    ToastAndroid.SHORT,
-                                );
-                            }
-                        }
-                    } else {
-                        ToastAndroid.show(
-                            '缺少讀取國光點數所需的金鑰 11A',
-                            ToastAndroid.SHORT,
+                if (card.is_kuokuang_card && card.type === CardType.EASY_CARD) {
+                    try {
+                        setKuoKuangPoints(
+                            await nfcService.readKuoKuangPoints(card),
                         );
+                    } catch (err) {
+                        let errorMessage = '發生未知的錯誤';
+                        if (err instanceof MissingNecessaryKeysException) {
+                            errorMessage = '缺少讀取國光點數所需的金鑰 11A';
+                        } else if (err instanceof InvalidKeysException) {
+                            errorMessage = '讀取國光點數所需的金鑰 11A 無效';
+                        }
+                        ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
                     }
                 }
 
-                // TPASS 通勤月票悠遊卡（不支援國光回數票悠遊卡）
+                // 查詢悠遊卡上的 TPASS 通勤月票資訊（不支援國光回數票悠遊卡）
                 if (
                     card.type === CardType.EASY_CARD &&
-                    !card.tags.includes('KuoKuangCard')
+                    !card.is_kuokuang_card
                 ) {
-                    const sector3KeyA = card.sectors.find(
-                        (s) => s.index === 3,
-                    )?.keyA;
-                    const sector8KeyA = card.sectors.find(
-                        (s) => s.index === 8,
-                    )?.keyA;
-                    if (sector3KeyA && sector8KeyA) {
-                        try {
-                            const {
-                                purchaseDateString: purchaseDate,
-                                expiryDateString: expiryDate,
-                            } = await nfcService.readTPassInfo(
-                                sector3KeyA,
-                                sector8KeyA,
-                            );
-                            if (purchaseDate) {
-                                setTPassPurchaseDate(purchaseDate);
-                                if (expiryDate) {
-                                    setTPassExpiryDate(expiryDate);
-                                } else {
-                                    setTPassExpiryDate('未啟用');
-                                }
-                                setIsTPassPurchased(true);
+                    try {
+                        const { purchaseDate, expiryDate } =
+                            await nfcService.readTpassInfo(card);
+                        if (purchaseDate) {
+                            setTpassPurchaseDate(getDateString(purchaseDate));
+                            if (expiryDate) {
+                                setTpassExpiryDate(getDateString(expiryDate));
+                            } else {
+                                setTpassExpiryDate('未啟用');
                             }
-                        } catch (err) {
-                            if (
-                                (err as any).message ===
-                                'mifareClassicAuthenticate fail: AUTH_FAIL'
-                            ) {
-                                ToastAndroid.show(
-                                    '讀取通勤月票資訊所需的金鑰 3A 或 8A 無效',
-                                    ToastAndroid.SHORT,
-                                );
-                            }
+                            setIsTpassPurchased(true);
                         }
-                    } else {
-                        ToastAndroid.show(
-                            '缺少讀取通勤月票資訊所需的金鑰 3A 或 8A',
-                            ToastAndroid.SHORT,
-                        );
+                    } catch (err) {
+                        let errorMessage = '發生未知的錯誤';
+                        if (err instanceof MissingNecessaryKeysException) {
+                            errorMessage =
+                                '缺少讀取通勤月票資訊所需的金鑰 3A 或 8A';
+                        } else if (err instanceof InvalidKeysException) {
+                            errorMessage =
+                                '讀取通勤月票資訊所需的金鑰 3A 或 8A 無效';
+                        }
+                        ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
                     }
                 }
 
-                setIsShowingResult(true);
+                setIsShowingResultModal(true);
             });
         } catch (err) {
             ToastAndroid.show(`${err}`, ToastAndroid.SHORT);
@@ -167,85 +138,108 @@ function App(): React.JSX.Element {
     }
 
     if (!isReady) {
+        setIsReady(true);
         readCard();
     }
 
     return (
         <>
             <StatusBar
-                barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-                backgroundColor={isDarkMode ? 'black' : 'white'}
+                barStyle={
+                    colorScheme === 'light' ? 'dark-content' : 'light-content'
+                }
+                backgroundColor={colorScheme === 'light' ? 'white' : 'black'}
             />
-            <View
-                style={{
-                    flex: 1,
-                    paddingTop: 32,
-                    paddingHorizontal: 24,
-                    backgroundColor: isDarkMode ? 'black' : 'white',
-                }}
-            >
-                <Text
-                    style={{
-                        fontSize: 24,
-                        fontWeight: '600',
-                        color: isDarkMode ? 'white' : 'black',
-                    }}
-                >
-                    HolyCard
-                </Text>
-                <View
-                    style={{
-                        flex: 1,
-                        justifyContent: 'center',
-                    }}
-                >
-                    {isReadingCard && (
-                        <Text
-                            style={{
-                                textAlign: 'center',
-                                fontSize: 24,
-                                fontWeight: '400',
-                                color: isDarkMode ? 'white' : 'black',
-                            }}
-                        >
-                            正在讀取卡片...
-                        </Text>
-                    )}
-                    {!isReadingCard && (
-                        <Text
-                            style={{
-                                textAlign: 'center',
-                                fontSize: 24,
-                                fontWeight: '400',
-                                color: isDarkMode ? 'white' : 'black',
-                            }}
-                        >
-                            請感應卡片
-                        </Text>
-                    )}
+            <View style={styles.body}>
+                <Text style={styles.appName}>HolyCard</Text>
+                <View style={styles.centerView}>
+                    <Text style={styles.centerText}>
+                        {isReadingCard ? '正在讀取...' : '請感應卡片'}
+                    </Text>
                 </View>
             </View>
-            {isShowingResult && (
-                <ResultModal
-                    cardType={cardType}
-                    cardName={cardName}
-                    cardBalance={cardBalance}
-                    isKuoKuangCard={isKuoKuangCard}
-                    cardKuoKuangPoints={cardKuoKuangPoints}
-                    isTPassPurchased={isTPassPurchased}
-                    tPassPurchaseDate={tPassPurchaseDate}
-                    tPassExpiryDate={tPassExpiryDate}
+            {isShowingResultModal && (
+                <Modal
+                    animationType="slide"
+                    transparent={true}
                     onRequestClose={() => {
                         setIsReady(false);
                         setIsReadingCard(false);
-                        setIsShowingResult(false);
-                        setIsKuoKuangCard(false);
-                        setIsTPassPurchased(false);
+                        setIsShowingResultModal(false);
+                        setIsTpassPurchased(false);
                     }}
-                />
+                >
+                    <View style={styles.resultModal}>
+                        <Result
+                            card={currentCard}
+                            balance={balance}
+                            kuoKuangPoints={kuoKuangPoints}
+                            isTpassPurchased={isTpassPurchased}
+                            tpassPurchaseDate={tpassPurchaseDate}
+                            tpassExpiryDate={tpassExpiryDate}
+                        />
+                    </View>
+                </Modal>
             )}
         </>
     );
 }
+
+const lightThemeStyles = StyleSheet.create({
+    body: {
+        flex: 1,
+        paddingTop: 32,
+        paddingHorizontal: 24,
+        backgroundColor: 'white',
+    },
+    appName: {
+        fontSize: 24,
+        fontWeight: '600',
+        color: 'black',
+    },
+    centerView: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    centerText: {
+        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: '400',
+        color: 'black',
+    },
+    resultModal: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+});
+const darkThemeStyles = StyleSheet.create({
+    body: {
+        flex: 1,
+        paddingTop: 32,
+        paddingHorizontal: 24,
+        backgroundColor: 'black',
+    },
+    appName: {
+        fontSize: 24,
+        fontWeight: '600',
+        color: 'white',
+    },
+    centerView: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    centerText: {
+        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: '400',
+        color: 'white',
+    },
+    resultModal: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+});
 
 export default App;

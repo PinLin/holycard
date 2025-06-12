@@ -1,5 +1,8 @@
 import nfcManager, { NfcTech } from 'react-native-nfc-manager';
 import { FailedToReadCardException } from '../exception/failed-to-read-card.exception';
+import { Card } from '../model/card.model';
+import { MissingNecessaryKeysException } from '../exception/missing-necessary-keys.exception';
+import { InvalidKeysException } from '../exception/invalid-keys.exception';
 
 export class NfcService {
     constructor() {
@@ -17,17 +20,20 @@ export class NfcService {
 
             const tag = await nfcManager.getTag();
             const uid = tag!.id!;
-            console.log(`UID: ${uid}`);
 
             // 如果讀取失敗就重試，至多十次
-            for (let i = 0; i < 10; i++) {
+            let i = 0;
+            while (i < 10) {
                 try {
                     return await handler(uid);
-                } catch {
-                    continue;
+                } catch (err) {
+                    if (err instanceof FailedToReadCardException && i < 10) {
+                        i++;
+                    } else {
+                        throw err;
+                    }
                 }
             }
-            throw new FailedToReadCardException();
         } finally {
             await nfcManager.cancelTechnologyRequest();
         }
@@ -42,23 +48,40 @@ export class NfcService {
     }
 
     private async authenticateWithKeyA(sector: number, keyA: string) {
-        return nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(
-            sector,
-            this.convertKey(keyA),
-        );
+        try {
+            return await nfcManager.mifareClassicHandlerAndroid.mifareClassicAuthenticateA(
+                sector,
+                this.convertKey(keyA),
+            );
+        } catch (err) {
+            if (
+                (err as Error).message ===
+                'mifareClassicAuthenticate fail: AUTH_FAIL'
+            ) {
+                throw new InvalidKeysException();
+            }
+        }
     }
 
     private async readBlock(block: number): Promise<number[]> {
-        const data = await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
-            block as any,
-        ) as number[];
+        const data =
+            (await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                block as any,
+            )) as number[];
 
-        if (data.length != 16) throw new Error('Failed to read block');
+        if (data.length !== 16) {
+            throw new FailedToReadCardException();
+        }
 
         return data;
     }
 
-    async readCardBalance(sector2KeyA: string): Promise<number> {
+    async readBalance(card: Card): Promise<number> {
+        const sector2KeyA = card.sectors.find((s) => s.index === 2)?.keyA;
+        if (!sector2KeyA) {
+            throw new MissingNecessaryKeysException();
+        }
+
         await this.authenticateWithKeyA(2, sector2KeyA);
         const block8 = await this.readBlock(8);
 
@@ -70,28 +93,33 @@ export class NfcService {
         if (balance >= 2147483648) {
             balance -= 2147483648 * 2;
         }
-
-        console.log(`Balance: ${balance}`);
         return balance;
     }
 
-    async readCardKuoKuangPoints(sector11KeyA: string): Promise<number> {
+    async readKuoKuangPoints(card: Card): Promise<number> {
+        const sector11KeyA = card.sectors.find((s) => s.index === 11)?.keyA;
+        if (!sector11KeyA) {
+            throw new MissingNecessaryKeysException();
+        }
+
         await this.authenticateWithKeyA(11, sector11KeyA);
         const block44 = await this.readBlock(44);
         const block46 = await this.readBlock(46);
 
-        const points = block44[4] - block46[0];
-
-        console.log(`KuoKuangPoints: ${points}`);
-        return points;
+        return block44[4] - block46[0];
     }
 
-    async readTPassInfo(
-        sector3KeyA: string,
-        sector8KeyA: string,
-    ): Promise<{ purchaseDateString: string | null; expiryDateString: string | null }> {
-        let purchaseDateString = null;
-        let expiryDateString = null;
+    async readTpassInfo(
+        card: Card,
+    ): Promise<{ purchaseDate: Date | null; expiryDate: Date | null }> {
+        const sector3KeyA = card.sectors.find((s) => s.index === 3)?.keyA;
+        const sector8KeyA = card.sectors.find((s) => s.index === 8)?.keyA;
+        if (!sector3KeyA || !sector8KeyA) {
+            throw new MissingNecessaryKeysException();
+        }
+
+        let purchaseDate: Date | null = null;
+        let expiryDate: Date | null = null;
 
         const parseDate = (data1: number, data2: number) => {
             const year = Math.floor(data2 / 2) + 1980;
@@ -104,29 +132,16 @@ export class NfcService {
         const block32 = await this.readBlock(32);
 
         if (block32[1] > 0 && block32[2] > 0) {
-            const purchaseDate = parseDate(block32[1], block32[2]);
-
-            const year = purchaseDate.getFullYear();
-            const month = (purchaseDate.getMonth() + 1).toString().padStart(2, '0');
-            const day = purchaseDate.getDate().toString().padStart(2, '0');
-            purchaseDateString = `${year}/${month}/${day}`;
+            purchaseDate = parseDate(block32[1], block32[2]);
 
             await this.authenticateWithKeyA(3, sector3KeyA);
             const block12 = await this.readBlock(12);
 
             if (block12[14] > 0 && block12[15] > 0) {
-                const expiryDate = parseDate(block12[14], block12[15]);
-                expiryDate.setDate(expiryDate.getDate());
-
-                const year = expiryDate.getFullYear();
-                const month = (expiryDate.getMonth() + 1).toString().padStart(2, '0');
-                const day = expiryDate.getDate().toString().padStart(2, '0');
-                expiryDateString = `${year}/${month}/${day}`;
+                expiryDate = parseDate(block12[14], block12[15]);
             }
         }
 
-        console.log(`TPassPurchaseDate: ${purchaseDateString}`);
-        console.log(`TPassExpiryDate: ${expiryDateString}`);
-        return { purchaseDateString, expiryDateString };
+        return { purchaseDate, expiryDate };
     }
 }
