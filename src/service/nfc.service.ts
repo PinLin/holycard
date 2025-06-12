@@ -97,7 +97,7 @@ export class NfcService {
             const year = Math.floor(data2 / 2) + 1980;
             const month = Math.floor(data1 / 32) + (data2 % 2) * 8;
             const day = data1 % 32;
-            return new Date(`${year}/${month}/${day}`);
+            return new Date(`${year}-${month}-${day}`);
         };
 
         await this.authenticateWithKeyA(8, sector8KeyA);
