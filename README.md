@@ -1,6 +1,8 @@
 # holycard
 
-我的卡片餘額讀取器，只有 Android 版，但你得先有 key 
+我的卡片餘額讀取器，只有 Android 版，但你得先有 key
+
+https://hackmd.io/@PinLin/ryUV9TR0Jx
 
 | ![](https://imgur.com/Quioo7P.png) | ![](https://imgur.com/fAE208A.png) |
 | :--------------------------------: | :--------------------------------: |
