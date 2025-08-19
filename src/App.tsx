@@ -24,7 +24,10 @@ import { Result } from './components/Result';
 import { getDateString } from './utils';
 import { MissingNecessaryKeysException } from './exception/missing-necessary-keys.exception';
 import { InvalidKeysException } from './exception/invalid-keys.exception';
+import { CardUnavailableException } from './exception/card-unavailable.exception';
+import { CardService } from './service/card.service';
 
+const cardService = new CardService();
 const nfcService = new NfcService();
 
 function App(): React.JSX.Element {
@@ -53,32 +56,10 @@ function App(): React.JSX.Element {
             await nfcService.requestMifareClassic(async (uid: string) => {
                 setIsReadingCard(true);
 
-                const response = await fetch(
-                    `https://card.pinlin.me/card/${uid}`,
-                );
-                if (!response.ok) {
-                    ToastAndroid.show('查無卡片資料', ToastAndroid.SHORT);
-                    setIsReady(false);
-                    setIsReadingCard(false);
-                    return;
-                }
-                const card: Card = await response.json();
+                const card: Card = await cardService.getCard(uid);
                 setCurrentCard(card);
 
-                try {
-                    setBalance(await nfcService.readBalance(card));
-                } catch (err) {
-                    let errorMessage = '發生未知的錯誤';
-                    if (err instanceof MissingNecessaryKeysException) {
-                        errorMessage = '缺少讀取餘額所需的金鑰 2A';
-                    } else if (err instanceof InvalidKeysException) {
-                        errorMessage = '讀取餘額所需的金鑰 2A 無效';
-                    }
-                    ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
-                    setIsReady(false);
-                    setIsReadingCard(false);
-                    return;
-                }
+                setBalance(await nfcService.readBalance(card));
 
                 // 國光回數票悠遊卡
                 if (card.is_kuokuang_card && card.type === CardType.EASY_CARD) {
@@ -129,8 +110,17 @@ function App(): React.JSX.Element {
 
                 setIsShowingResultModal(true);
             });
+
         } catch (err) {
-            ToastAndroid.show(`${err}`, ToastAndroid.SHORT);
+            let errorMessage = '發生未知的錯誤';
+            if (err instanceof CardUnavailableException) {
+                errorMessage = '查無卡片資料';
+            } else if (err instanceof MissingNecessaryKeysException) {
+                errorMessage = '缺少讀取餘額所需的金鑰 2A';
+            } else if (err instanceof InvalidKeysException) {
+                errorMessage = '讀取餘額所需的金鑰 2A 無效';
+            }
+            ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
 
             setIsReady(false);
             setIsReadingCard(false);
