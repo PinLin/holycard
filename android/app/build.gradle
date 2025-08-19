@@ -82,8 +82,8 @@ android {
         applicationId "me.pinlin.holycard"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 14
-        versionName "3.3.0"
+        versionCode 15
+        versionName "3.4.0"
     }
     signingConfigs {
         debug {
