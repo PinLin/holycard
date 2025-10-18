@@ -139,6 +139,9 @@ export class NfcService {
 
             if (block12[14] > 0 && block12[15] > 0) {
                 expiryDate = parseDate(block12[14], block12[15]);
+                if (expiryDate < purchaseDate) {
+                    expiryDate = null;
+                }
             }
         }
 
