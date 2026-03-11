@@ -99,10 +99,10 @@ function App(): React.JSX.Element {
                         let errorMessage = '發生未知的錯誤';
                         if (err instanceof MissingNecessaryKeysException) {
                             errorMessage =
-                                '缺少讀取通勤月票資訊所需的金鑰 3A 或 8A';
+                                '缺少讀取通勤月票資訊所需的金鑰 6A 或 8A';
                         } else if (err instanceof InvalidKeysException) {
                             errorMessage =
-                                '讀取通勤月票資訊所需的金鑰 3A 或 8A 無效';
+                                '讀取通勤月票資訊所需的金鑰 6A 或 8A 無效';
                         }
                         ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
                     }

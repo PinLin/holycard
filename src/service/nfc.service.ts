@@ -112,14 +112,11 @@ export class NfcService {
     async readTpassInfo(
         card: Card,
     ): Promise<{ purchaseDate: Date | null; expiryDate: Date | null }> {
-        const sector3KeyA = card.sectors.find((s) => s.index === 3)?.keyA;
         const sector8KeyA = card.sectors.find((s) => s.index === 8)?.keyA;
-        if (!sector3KeyA || !sector8KeyA) {
+        const sector6KeyA = card.sectors.find((s) => s.index === 6)?.keyA;
+        if (!sector8KeyA || !sector6KeyA) {
             throw new MissingNecessaryKeysException();
         }
-
-        let purchaseDate: Date | null = null;
-        let expiryDate: Date | null = null;
 
         const parseDate = (data1: number, data2: number) => {
             const year = Math.floor(data2 / 2) + 1980;
@@ -131,17 +128,19 @@ export class NfcService {
         await this.authenticateWithKeyA(8, sector8KeyA);
         const block32 = await this.readBlock(32);
 
-        if (block32[1] > 0 && block32[2] > 0) {
-            purchaseDate = parseDate(block32[1], block32[2]);
+        if (block32[1] === 0 || block32[2] === 0) {
+            return { purchaseDate: null, expiryDate: null };
+        }
+        const purchaseDate = parseDate(block32[1], block32[2]);
 
-            await this.authenticateWithKeyA(3, sector3KeyA);
-            const block12 = await this.readBlock(12);
+        await this.authenticateWithKeyA(6, sector6KeyA);
+        const block26 = await this.readBlock(26);
 
-            if (block12[14] > 0 && block12[15] > 0) {
-                expiryDate = parseDate(block12[14], block12[15]);
-                if (expiryDate < purchaseDate) {
-                    expiryDate = null;
-                }
+        let expiryDate: Date | null = null;
+        if (block26[14] > 0 && block26[15] > 0) {
+            const candidate = parseDate(block26[14], block26[15]);
+            if (candidate > purchaseDate) {
+                expiryDate = candidate;
             }
         }
 
