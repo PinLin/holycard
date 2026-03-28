@@ -19,3 +19,18 @@ export interface CardSector {
     keyA: string | null;
     keyB: string | null;
 }
+
+export interface TpassInfo {
+    purchaseDate: Date | null;
+    expiryDate: Date | null;
+}
+
+export interface CardReadResult {
+    card: Card;
+    balance: number;
+    kuokuangPoints?: number;
+    tpass?: TpassInfo;
+    warnings: string[];
+}
+
+export type CardReaderStatus = 'ready' | 'reading' | 'success';
