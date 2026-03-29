@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { CardUnavailableError } from '../error/cardUnavailableError';
-import { FailedToReadCardError } from '../error/failedToReadCardError';
 import { MissingNecessaryKeysError } from '../error/missingNecessaryKeysError';
 import { getCard } from '../services/cardService';
+import { saveHistoryEntry } from '../services/historyStorage';
 import {
     initializeNfc,
     readBalance,
@@ -22,63 +22,81 @@ export function useCardReader() {
     const [result, setResult] = useState<CardReadResult | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    async function startScanning() {
+    async function startScanning(shouldClearResult = true) {
         await initializeNfc();
-        setStatus('ready');
-        setResult(null);
+        if (shouldClearResult) {
+            setResult(null);
+        }
         setError(null);
 
         try {
-            const nextResult = await requestMifareClassic(async (uid) => {
-                setStatus('reading');
-                setError(null);
+            const nextResult = await requestMifareClassic(
+                async (uid) => {
+                    setStatus('reading');
+                    setResult(null);
+                    setError(null);
 
-                const card = await getCard(uid);
-                const balance = await readBalance(card);
+                    const card = await getCard(uid);
+                    const balance = await readBalance(card);
 
-                const warnings: string[] = [];
+                    const warnings: string[] = [];
 
-                let kuokuangPoints: number | undefined;
-                if (card.is_kuokuang_card) {
-                    try {
-                        kuokuangPoints = await readKuokuangPoints(card);
-                    } catch (err) {
-                        if (err instanceof MissingNecessaryKeysError) {
-                            warnings.push('缺少讀取國光點數的金鑰');
-                        } else {
-                            throw err;
+                    let kuokuangPoints: number | undefined;
+                    if (card.is_kuokuang_card) {
+                        try {
+                            kuokuangPoints = await readKuokuangPoints(card);
+                        } catch (err) {
+                            if (err instanceof MissingNecessaryKeysError) {
+                                warnings.push('缺少讀取國光點數的金鑰');
+                            } else {
+                                throw err;
+                            }
                         }
                     }
-                }
 
-                let tpass: TpassInfo | undefined;
-                if (
-                    !card.is_kuokuang_card &&
-                    card.type === CardType.EASY_CARD
-                ) {
-                    try {
-                        tpass = await readTpassInfo(card);
-                    } catch (err) {
-                        if (err instanceof MissingNecessaryKeysError) {
-                            warnings.push('缺少讀取通勤月票資訊的金鑰');
-                        } else {
-                            throw err;
+                    let tpass: TpassInfo | undefined;
+                    if (
+                        !card.is_kuokuang_card &&
+                        card.type === CardType.EASY_CARD
+                    ) {
+                        try {
+                            tpass = await readTpassInfo(card);
+                        } catch (err) {
+                            if (err instanceof MissingNecessaryKeysError) {
+                                warnings.push('缺少讀取通勤月票資訊的金鑰');
+                            } else {
+                                throw err;
+                            }
                         }
                     }
-                }
 
-                return {
-                    card,
-                    balance,
-                    kuokuangPoints,
-                    tpass,
-                    warnings,
-                };
-            });
+                    return {
+                        card,
+                        balance,
+                        kuokuangPoints,
+                        tpass,
+                        warnings,
+                    };
+                },
+                () => {
+                    setStatus('ready');
+                },
+            );
 
-            setStatus('success');
+            const readAt = new Date();
+            nextResult.readAt = readAt;
+
+            const historyEntry: CardReadResult = {
+                ...nextResult,
+                readAt,
+            };
+            await saveHistoryEntry(historyEntry);
+
             setResult(nextResult);
             setError(null);
+            setTimeout(() => {
+                startScanning(false);
+            }, 0);
         } catch (err) {
             setStatus('ready');
             setResult(null);
@@ -90,20 +108,17 @@ export function useCardReader() {
         }
     }
 
-    async function retryScanning() {
-        await startScanning();
-    }
-
     async function dismissResult() {
         setStatus('ready');
         setResult(null);
         setError(null);
-        await startScanning();
     }
 
     async function acknowledgeError() {
         setError(null);
-        await startScanning();
+        setTimeout(() => {
+            startScanning(false);
+        }, 0);
     }
 
     return {
@@ -111,7 +126,6 @@ export function useCardReader() {
         result,
         error,
         startScanning,
-        retryScanning,
         acknowledgeError,
         dismissResult,
     };

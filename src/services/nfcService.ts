@@ -10,14 +10,20 @@ export function initializeNfc() {
     return nfcManager.start();
 }
 
-export async function requestMifareClassic<T>(
-    handler: (uid: string) => Promise<T>,
-): Promise<T> {
+export async function cancelScanning() {
     try {
         await nfcManager.cancelTechnologyRequest();
     } catch (error) {}
+}
+
+export async function requestMifareClassic<T>(
+    handler: (uid: string) => Promise<T>,
+    onReady?: () => void,
+): Promise<T> {
+    await cancelScanning();
 
     try {
+        onReady?.();
         await nfcManager.requestTechnology(NfcTech.MifareClassic);
 
         const tag = await nfcManager.getTag();
@@ -39,7 +45,7 @@ export async function requestMifareClassic<T>(
 
         throw new FailedToReadCardError();
     } finally {
-        await nfcManager.cancelTechnologyRequest();
+        await cancelScanning();
     }
 }
 

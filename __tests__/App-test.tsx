@@ -12,10 +12,13 @@ jest.mock('../src/hooks/useCardReader', () => ({
         result: null,
         error: null,
         startScanning: jest.fn(() => Promise.resolve()),
-        retryScanning: jest.fn(),
         acknowledgeError: jest.fn(),
         dismissResult: jest.fn(),
     }),
+}));
+
+jest.mock('../src/services/historyStorage', () => ({
+    loadHistory: jest.fn(() => new Promise(() => {})),
 }));
 
 test('renders correctly', async () => {

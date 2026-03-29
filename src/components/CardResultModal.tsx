@@ -8,6 +8,7 @@ interface CardResultModalProps {
     visible: boolean;
     darkMode: boolean;
     onClose: () => void;
+    footerReadAt?: boolean;
 }
 
 export function CardResultModal({
@@ -15,6 +16,7 @@ export function CardResultModal({
     visible,
     darkMode,
     onClose,
+    footerReadAt,
 }: CardResultModalProps) {
     if (!result) {
         return null;
@@ -23,7 +25,11 @@ export function CardResultModal({
     return (
         <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
             <View style={styles.container}>
-                <CardSummary result={result} darkMode={darkMode} />
+                <CardSummary
+                    result={result}
+                    darkMode={darkMode}
+                    footerReadAt={footerReadAt}
+                />
             </View>
         </Modal>
     );

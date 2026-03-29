@@ -1,14 +1,19 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { CardReadResult, CardType } from '../types';
-import { getDateString } from '../utils';
+import { getDateString, getDateTimeString } from '../utils';
 
 interface CardSummaryProps {
     result: CardReadResult;
     darkMode: boolean;
+    footerReadAt?: boolean;
 }
 
-export function CardSummary({ result, darkMode }: CardSummaryProps) {
+export function CardSummary({
+    result,
+    darkMode,
+    footerReadAt = false,
+}: CardSummaryProps) {
     const styles = darkMode ? darkThemeStyles : lightThemeStyles;
 
     return (
@@ -54,24 +59,29 @@ export function CardSummary({ result, darkMode }: CardSummaryProps) {
                 warnings={result.warnings}
                 warningStyle={styles.warning}
             />
+            {footerReadAt && result.readAt && (
+                <Text style={styles.readAtFooter}>
+                    {getDateTimeString(result.readAt)}
+                </Text>
+            )}
         </View>
     );
 }
 
 function CardBrandImage({ type }: { type: CardType }) {
     return (
-        <Image
-            source={
-                type === CardType.I_PASS
-                    ? require('../image/ipass.png')
-                    : type === CardType.EASY_CARD
-                    ? require('../image/easycard.png')
-                    : type === CardType.HAPPY_CASH
-                    ? require('../image/happycash.png')
-                    : require('../image/unknown.png')
-            }
-        />
+        <Image source={getCardBrandImageSource(type)} />
     );
+}
+
+export function getCardBrandImageSource(type: CardType) {
+    return type === CardType.I_PASS
+        ? require('../image/ipass.png')
+        : type === CardType.EASY_CARD
+          ? require('../image/easycard.png')
+          : type === CardType.HAPPY_CASH
+            ? require('../image/happycash.png')
+            : require('../image/unknown.png');
 }
 
 function SummaryRow({
@@ -141,6 +151,11 @@ const baseStyles = {
         fontSize: 16,
         textAlign: 'center' as const,
     },
+    readAtFooter: {
+        alignSelf: 'flex-end' as const,
+        marginTop: 20,
+        fontSize: 13,
+    },
 };
 
 const lightThemeStyles = StyleSheet.create({
@@ -170,6 +185,10 @@ const lightThemeStyles = StyleSheet.create({
         ...baseStyles.warning,
         color: '#8A5B00',
     },
+    readAtFooter: {
+        ...baseStyles.readAtFooter,
+        color: '#666',
+    },
 });
 
 const darkThemeStyles = StyleSheet.create({
@@ -198,5 +217,9 @@ const darkThemeStyles = StyleSheet.create({
     warning: {
         ...baseStyles.warning,
         color: '#FFD27D',
+    },
+    readAtFooter: {
+        ...baseStyles.readAtFooter,
+        color: '#BDBDBD',
     },
 });

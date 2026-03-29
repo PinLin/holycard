@@ -31,6 +31,7 @@ export interface CardReadResult {
     kuokuangPoints?: number;
     tpass?: TpassInfo;
     warnings: string[];
+    readAt?: Date;
 }
 
-export type CardReaderStatus = 'ready' | 'reading' | 'success';
+export type CardReaderStatus = 'ready' | 'reading';
