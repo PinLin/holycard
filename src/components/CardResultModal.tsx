@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet } from 'react-native';
 import { CardReadResult } from '../types';
 import { CardSummary } from './CardSummary';
 
@@ -23,14 +23,21 @@ export function CardResultModal({
     }
 
     return (
-        <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
-            <View style={styles.container}>
-                <CardSummary
-                    result={result}
-                    darkMode={darkMode}
-                    footerReadAt={footerReadAt}
-                />
-            </View>
+        <Modal
+            animationType="slide"
+            transparent
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            <Pressable style={styles.container} onPress={onClose}>
+                <Pressable onPress={() => {}}>
+                    <CardSummary
+                        result={result}
+                        darkMode={darkMode}
+                        footerReadAt={footerReadAt}
+                    />
+                </Pressable>
+            </Pressable>
         </Modal>
     );
 }

@@ -37,11 +37,7 @@ export function CardSummary({
                     <Text style={styles.tpass}>基北北桃通勤月票</Text>
                     <SummaryRow
                         label="購買日期："
-                        value={
-                            result.tpass.purchaseDate
-                                ? getDateString(result.tpass.purchaseDate)
-                                : '未購買'
-                        }
+                        value={getDateString(result.tpass.purchaseDate)}
                         styles={styles}
                     />
                     <SummaryRow
@@ -118,11 +114,10 @@ function WarningList({
 const baseStyles = {
     body: {
         margin: 20,
-        borderRadius: 10,
+        borderRadius: 18,
         paddingHorizontal: 30,
-        paddingVertical: 50,
-        shadowRadius: 2,
-        elevation: 5,
+        paddingTop: 36,
+        paddingBottom: 28,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -162,7 +157,6 @@ const lightThemeStyles = StyleSheet.create({
     body: {
         ...baseStyles.body,
         backgroundColor: '#FAFAFA',
-        shadowColor: 'black',
     },
     cardNumber: {
         ...baseStyles.cardNumber,
@@ -187,7 +181,7 @@ const lightThemeStyles = StyleSheet.create({
     },
     readAtFooter: {
         ...baseStyles.readAtFooter,
-        color: '#666',
+        color: '#333',
     },
 });
 
@@ -195,7 +189,6 @@ const darkThemeStyles = StyleSheet.create({
     body: {
         ...baseStyles.body,
         backgroundColor: '#303030',
-        shadowColor: 'white',
     },
     cardNumber: {
         ...baseStyles.cardNumber,
@@ -220,6 +213,6 @@ const darkThemeStyles = StyleSheet.create({
     },
     readAtFooter: {
         ...baseStyles.readAtFooter,
-        color: '#BDBDBD',
+        color: '#DDD',
     },
 });

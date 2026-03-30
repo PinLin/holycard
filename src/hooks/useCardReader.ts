@@ -84,15 +84,13 @@ export function useCardReader() {
             );
 
             const readAt = new Date();
-            nextResult.readAt = readAt;
-
-            const historyEntry: CardReadResult = {
+            const nextHistoryEntry: CardReadResult = {
                 ...nextResult,
                 readAt,
             };
-            await saveHistoryEntry(historyEntry);
+            await saveHistoryEntry(nextHistoryEntry);
 
-            setResult(nextResult);
+            setResult(nextHistoryEntry);
             setError(null);
             setTimeout(() => {
                 startScanning(false);
@@ -108,13 +106,13 @@ export function useCardReader() {
         }
     }
 
-    async function dismissResult() {
+    function dismissResult() {
         setStatus('ready');
         setResult(null);
         setError(null);
     }
 
-    async function acknowledgeError() {
+    function acknowledgeError() {
         setError(null);
         setTimeout(() => {
             startScanning(false);
