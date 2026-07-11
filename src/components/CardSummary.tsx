@@ -1,5 +1,12 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import {
+    Image,
+    Pressable,
+    StyleSheet,
+    Text,
+    ToastAndroid,
+    View,
+} from 'react-native';
 import { CardReadResult, CardType } from '../types';
 import { getDateString, getDateTimeString } from '../utils';
 
@@ -32,14 +39,16 @@ export function CardSummary({
                     styles={styles}
                 />
             )}
-            {result.tpass?.purchaseDate && (
+            {(result.tpass?.purchaseDate || result.tpass?.expiryDate) && (
                 <>
                     <Text style={styles.tpass}>基北北桃通勤月票</Text>
-                    <SummaryRow
-                        label="購買日期："
-                        value={getDateString(result.tpass.purchaseDate)}
-                        styles={styles}
-                    />
+                    {result.tpass.purchaseDate && (
+                        <SummaryRow
+                            label="購買日期："
+                            value={getDateString(result.tpass.purchaseDate)}
+                            styles={styles}
+                        />
+                    )}
                     <SummaryRow
                         label="到期日期："
                         value={
@@ -56,12 +65,25 @@ export function CardSummary({
                 warningStyle={styles.warning}
             />
             {footerReadAt && result.readAt && (
-                <Text style={styles.readAtFooter}>
-                    {getDateTimeString(result.readAt)}
-                </Text>
+                <Pressable
+                    onLongPress={() => showReadInterfaceToast(result)}
+                    style={baseStyles.readAtFooterButton}
+                >
+                    <Text style={styles.readAtFooter}>
+                        {getDateTimeString(result.readAt)}
+                    </Text>
+                </Pressable>
             )}
         </View>
     );
+}
+
+function showReadInterfaceToast(result: CardReadResult) {
+    const message =
+        result.serverKeysUsed === true
+            ? '透過 MIFARE Classic 介面'
+            : '透過 JavaCard Applet 介面';
+    ToastAndroid.show(message, ToastAndroid.SHORT);
 }
 
 function CardBrandImage({ type }: { type: CardType }) {
@@ -146,9 +168,11 @@ const baseStyles = {
         fontSize: 16,
         textAlign: 'center' as const,
     },
-    readAtFooter: {
+    readAtFooterButton: {
         alignSelf: 'flex-end' as const,
         marginTop: 20,
+    },
+    readAtFooter: {
         fontSize: 13,
     },
 };

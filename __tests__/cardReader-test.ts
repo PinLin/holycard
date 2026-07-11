@@ -57,7 +57,7 @@ beforeEach(() => {
 });
 
 describe('readCard', () => {
-    test('1. chip card (IsoDep + applet success): reads via applet, no MIFARE switch, balance from applet', async () => {
+    test('1. chip card (IsoDep + applet success): reads via applet, no MIFARE switch, serverKeysUsed false, balance from applet', async () => {
         readEasyCardChip.mockResolvedValue({
             number: '9134',
             balance: 111,
@@ -72,9 +72,10 @@ describe('readCard', () => {
         expect(session.connectMifareClassic).not.toHaveBeenCalled();
         expect(readBalance).not.toHaveBeenCalled();
         expect(result.balance).toBe(111);
+        expect(result.serverKeysUsed).toBe(false);
     });
 
-    test('2. co-branded card (applet 6A82, has MIFARE): falls back to server keys, balance from readBalance', async () => {
+    test('2. co-branded card (applet 6A82, has MIFARE): falls back to server keys, serverKeysUsed true, balance from readBalance', async () => {
         readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
         getCard.mockResolvedValue(
             makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
@@ -87,6 +88,7 @@ describe('readCard', () => {
 
         expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
         expect(result.balance).toBe(500);
+        expect(result.serverKeysUsed).toBe(true);
     });
 
     test('3. applet 6A82 but no MIFARE Classic: EasyCardAppletUnavailableError propagates, MIFARE not connected', async () => {
@@ -112,7 +114,7 @@ describe('readCard', () => {
         expect(session.connectMifareClassic).not.toHaveBeenCalled();
     });
 
-    test('5. legacy card (no IsoDep, has MIFARE): reads via server keys, IsoDep not connected', async () => {
+    test('5. legacy card (no IsoDep, has MIFARE): reads via server keys, IsoDep not connected, serverKeysUsed true', async () => {
         getCard.mockResolvedValue(
             makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
         );
@@ -128,6 +130,7 @@ describe('readCard', () => {
         expect(session.connectIsoDep).not.toHaveBeenCalled();
         expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
         expect(result.balance).toBe(300);
+        expect(result.serverKeysUsed).toBe(true);
     });
 
     test('6. neither IsoDep nor MIFARE Classic: FailedToReadCardError', async () => {
@@ -143,7 +146,7 @@ describe('readCard', () => {
 });
 
 describe('readViaApplet', () => {
-    test('7. backend has no record (getCard throws): still succeeds, nickname empty, sectors empty', async () => {
+    test('7. backend has no record (getCard throws): still succeeds, nickname empty, sectors empty, serverKeysUsed false', async () => {
         readEasyCardChip.mockResolvedValue({
             number: '9134',
             balance: 88,
@@ -158,11 +161,12 @@ describe('readViaApplet', () => {
         expect(result.card.nickname).toBe('');
         expect(result.card.sectors).toEqual([]);
         expect(result.balance).toBe(88);
+        expect(result.serverKeysUsed).toBe(false);
     });
 });
 
 describe('readViaServerKeys', () => {
-    test('8a. kuokuang card: reads points, does not read tpass', async () => {
+    test('8a. kuokuang card: reads points, does not read tpass, serverKeysUsed true', async () => {
         getCard.mockResolvedValue(
             makeCard({
                 is_kuokuang_card: true,
@@ -178,6 +182,7 @@ describe('readViaServerKeys', () => {
         expect(getCard).toHaveBeenCalledWith('ABCD1234');
         expect(result.kuokuangPoints).toBe(15);
         expect(readTpassInfo).not.toHaveBeenCalled();
+        expect(result.serverKeysUsed).toBe(true);
     });
 
     test('8b. kuokuang card missing points key: warning recorded, kuokuangPoints undefined', async () => {

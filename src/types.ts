@@ -32,6 +32,7 @@ export interface CardReadResult {
     tpass?: TpassInfo;
     warnings: string[];
     readAt?: Date;
+    serverKeysUsed?: boolean;
 }
 
 export type CardReaderStatus = 'ready' | 'reading';

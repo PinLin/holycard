@@ -13,7 +13,7 @@ import {
 
 /**
  * 晶片悠遊卡(9122/9132)透過 applet 免金鑰讀取，不需後端金鑰；後端可能沒有此卡
- * 紀錄，所以缺後端 metadata 不算失敗。usedServerKey = false。
+ * 紀錄，所以缺後端 metadata 不算失敗。serverKeysUsed = false。
  */
 export async function readViaApplet(
     session: CardSession,
@@ -41,12 +41,13 @@ export async function readViaApplet(
         balance: chip.balance,
         tpass: chip.tpass,
         warnings: [],
+        serverKeysUsed: false,
     };
 }
 
 /**
  * 聯名卡 / 舊卡：EasyCard 資料在 MIFARE Classic 加密磁區，需後端每磁區金鑰。缺選填
- * 金鑰(國光點數、月票)降級為 warning 而非整筆失敗。usedServerKey = true。
+ * 金鑰(國光點數、月票)降級為 warning 而非整筆失敗。serverKeysUsed = true。
  */
 export async function readViaServerKeys(
     session: CardSession,
@@ -82,7 +83,7 @@ export async function readViaServerKeys(
         }
     }
 
-    return { card, balance, kuokuangPoints, tpass, warnings };
+    return { card, balance, kuokuangPoints, tpass, warnings, serverKeysUsed: true };
 }
 
 /**
