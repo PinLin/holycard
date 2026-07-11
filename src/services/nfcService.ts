@@ -1,10 +1,23 @@
-import nfcManager, { NfcTech } from 'react-native-nfc-manager';
+import nfcManager, { NfcEvents, NfcTech } from 'react-native-nfc-manager';
+// @ts-ignore internal module, no bundled types
+import { callNative } from 'react-native-nfc-manager/src/NativeNfcManager';
 import { FailedToReadCardError } from '../error/failedToReadCardError';
 import { MissingNecessaryKeysError } from '../error/missingNecessaryKeysError';
 import { Card, TpassInfo } from '../types';
 
 const MIFARE_BLOCK_SIZE = 16;
 const MAX_READ_RETRIES = 10;
+
+// Android Tag.getTechList() fully-qualified class names, as surfaced in the
+// DiscoverTag event's `techTypes`.
+const TECH_ISO_DEP = 'android.nfc.tech.IsoDep';
+const TECH_MIFARE_CLASSIC = 'android.nfc.tech.MifareClassic';
+
+// NfcAdapter reader-mode flags: NFC_A (0x1) + SKIP_NDEF_CHECK (0x80) +
+// NO_PLATFORM_SOUNDS (0x100), summed as they are disjoint bits. Reader mode
+// makes this app own the NFC field exclusively (no other app can grab the tag)
+// and avoids the foreground-dispatch onPause/onResume churn.
+const READER_MODE_FLAGS = 0x1 + 0x80 + 0x100;
 
 export function initializeNfc() {
     return nfcManager.start();
@@ -49,6 +62,150 @@ export async function requestMifareClassic<T>(
     }
 }
 
+export interface CardSession {
+    uid: string;
+    techTypes: string[];
+    hasIsoDep: boolean;
+    hasMifareClassic: boolean;
+    /** Connects the IsoDep (ISO14443-4) tech so `transceive` can send APDUs. */
+    connectIsoDep: () => Promise<void>;
+    /**
+     * Switches to MIFARE Classic on the SAME tapped card (closes IsoDep first if
+     * it was connected). Verified safe on dual-interface cards: the tag survives
+     * the IsoDep→MifareClassic switch within one tap.
+     */
+    connectMifareClassic: () => Promise<void>;
+    /** Raw APDU transceive; only valid after `connectIsoDep`. */
+    transceive: (apdu: number[]) => Promise<number[]>;
+}
+
+export interface CardScanHandle {
+    /** Stops scanning and releases the tag / NFC field. Idempotent. */
+    stop: () => Promise<void>;
+}
+
+export interface CardScanHandlers<T> {
+    onReady?: () => void;
+    onReading?: () => void;
+    onResult: (result: T) => void;
+    onError: (error: unknown) => void;
+}
+
+/**
+ * Starts CONTINUOUS single-tap card scanning in reader mode. Registers reader
+ * mode ONCE and keeps it registered: the reader-mode presence check fires
+ * DiscoverTag only once while a card rests on the reader, so each card is read
+ * once per tap (no re-read storm) and a fresh tap reads the next card. Reader
+ * mode also owns the NFC field exclusively so other NFC apps can't grab the tag.
+ *
+ * The handler talks IsoDep (chip EasyCard applet) and/or switches to MIFARE
+ * Classic (legacy / co-branded) on the same card via `session`. Per-tap cleanup
+ * uses `closeTechnology` (nulls the native techRequest without invoking its
+ * pending callback); it must NEVER call cancelTechnologyRequest, which would
+ * re-invoke the connect() callback and abort the app.
+ */
+export function startCardScanning<T>(
+    handler: (session: CardSession) => Promise<T>,
+    handlers: CardScanHandlers<T>,
+): CardScanHandle {
+    let stopped = false;
+    let busy = false;
+
+    const onTag = async (tag: any) => {
+        // Ignore re-entrant events while a read is in flight; reader-mode presence
+        // keeps the same resting card from firing again once handled.
+        if (stopped || busy) {
+            return;
+        }
+        busy = true;
+        handlers.onReading?.();
+
+        const techTypes: string[] = tag?.techTypes || [];
+        const session: CardSession = {
+            uid: tag?.id ?? '',
+            techTypes,
+            hasIsoDep: techTypes.includes(TECH_ISO_DEP),
+            hasMifareClassic: techTypes.includes(TECH_MIFARE_CLASSIC),
+            connectIsoDep: async () => {
+                // Close any tech already open (e.g. MifareClassic from a prior
+                // retry) so this is a clean re-select, not a live tech switch.
+                try {
+                    await nfcManager.close();
+                } catch (error) {}
+                await nfcManager.connect([NfcTech.IsoDep]);
+            },
+            connectMifareClassic: async () => {
+                try {
+                    await nfcManager.close();
+                } catch (error) {}
+                await nfcManager.connect([NfcTech.MifareClassic]);
+            },
+            transceive: (apdu) => nfcManager.transceive(apdu),
+        };
+
+        try {
+            let retryCount = 0;
+            for (;;) {
+                try {
+                    const result = await handler(session);
+                    if (!stopped) {
+                        handlers.onResult(result);
+                    }
+                    break;
+                } catch (error) {
+                    if (
+                        error instanceof FailedToReadCardError &&
+                        retryCount < MAX_READ_RETRIES
+                    ) {
+                        retryCount += 1;
+                        continue;
+                    }
+                    if (!stopped) {
+                        handlers.onError(error);
+                    }
+                    break;
+                }
+            }
+        } finally {
+            // Release the tech handle but KEEP reader mode registered.
+            try {
+                await callNative('closeTechnology');
+            } catch (error) {}
+            busy = false;
+        }
+    };
+
+    nfcManager.setEventListener(NfcEvents.DiscoverTag, onTag);
+    handlers.onReady?.();
+    nfcManager
+        .registerTagEvent({
+            isReaderModeEnabled: true,
+            readerModeFlags: READER_MODE_FLAGS,
+            readerModeDelay: 5,
+        })
+        .catch((error) => {
+            if (!stopped) {
+                handlers.onError(error);
+            }
+        });
+
+    return {
+        stop: async () => {
+            if (stopped) {
+                return;
+            }
+            stopped = true;
+            try {
+                await callNative('closeTechnology');
+            } catch (error) {}
+            try {
+                await nfcManager.unregisterTagEvent();
+            } catch (error) {}
+            nfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+        },
+    };
+}
+
 function convertKey(keyHexString: string): number[] {
     const result = [] as number[];
     for (let i = 0; i < keyHexString.length; i += 2) {
@@ -65,20 +222,22 @@ async function authenticateWithKeyA(sector: number, keyA: string) {
             convertKey(keyA),
         );
     } catch (error) {
-        if (
-            (error as Error).message ===
-            'mifareClassicAuthenticate fail: AUTH_FAIL'
-        ) {
-            throw new FailedToReadCardError();
-        }
+        // Any auth failure (wrong key, lost tag, RF glitch) must abort this read
+        // rather than silently falling through to read an unauthenticated block.
+        throw new FailedToReadCardError();
     }
 }
 
 async function readBlock(block: number): Promise<number[]> {
-    const data =
-        (await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
-            block as never,
-        )) as number[];
+    let data: number[];
+    try {
+        data =
+            (await nfcManager.mifareClassicHandlerAndroid.mifareClassicReadBlock(
+                block as never,
+            )) as number[];
+    } catch (error) {
+        throw new FailedToReadCardError();
+    }
 
     if (data.length !== MIFARE_BLOCK_SIZE) {
         throw new FailedToReadCardError();
