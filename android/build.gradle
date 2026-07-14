@@ -19,3 +19,10 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    repositories {
+        // FreeDroidWarn 由 JitPack 發布
+        maven { url("https://jitpack.io") }
+    }
+}

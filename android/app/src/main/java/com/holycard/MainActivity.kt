@@ -1,11 +1,19 @@
 package com.holycard
 
+import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
+import org.woheller69.freeDroidWarn.FreeDroidWarn
 
 class MainActivity : ReactActivity() {
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    // 升級後顯示一次警告:本 App 不參與 Google 強制的開發者身分驗證
+    FreeDroidWarn.showWarningOnUpgrade(this, BuildConfig.VERSION_CODE)
+  }
 
   /**
    * Returns the name of the main component registered from JavaScript. This is used to schedule

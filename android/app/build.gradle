@@ -119,6 +119,9 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // 升級後提示使用者本 App 不參與 Google 強制的開發者身分驗證(Apache-2.0)
+    implementation("com.github.woheller69:FreeDroidWarn:V1.13")
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
