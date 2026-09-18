@@ -99,15 +99,46 @@ describe('EasyCard applet parsers', () => {
         expect(parseEasyCardNumber(data)).toBe('0905 0012 3456 7890');
     });
 
-    test('parses balance as little-endian uint16 NT$', () => {
+    test('parses a negative balance as little-endian int16 NT$', () => {
+        // -5: FB FF；-100: 9C FF；-1: FF FF。負餘額只會是幾十元，不可顯示成 65531。
         expect(
-            parseEasyCardBalance(buildCardData(CARD_NUMBER_BYTES, [0x64, 0x00])),
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0xfb, 0xff]),
+            ),
+        ).toBe(-5);
+        expect(
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0x9c, 0xff]),
+            ),
+        ).toBe(-100);
+        expect(
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0xff, 0xff]),
+            ),
+        ).toBe(-1);
+        // 0x7FFF 是有號 16 位元的正數上限，必須維持正值。
+        expect(
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0xff, 0x7f]),
+            ),
+        ).toBe(32767);
+    });
+
+    test('parses balance as little-endian int16 NT$', () => {
+        expect(
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0x64, 0x00]),
+            ),
         ).toBe(100);
         expect(
-            parseEasyCardBalance(buildCardData(CARD_NUMBER_BYTES, [0xe8, 0x03])),
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0xe8, 0x03]),
+            ),
         ).toBe(1000);
         expect(
-            parseEasyCardBalance(buildCardData(CARD_NUMBER_BYTES, [0x00, 0x00])),
+            parseEasyCardBalance(
+                buildCardData(CARD_NUMBER_BYTES, [0x00, 0x00]),
+            ),
         ).toBe(0);
     });
 
@@ -180,7 +211,10 @@ describe('readEasyCardChip', () => {
         const transceive = fakeTransceive(
             {
                 select: OK,
-                data: [...buildCardData(CARD_NUMBER_BYTES, [0x64, 0x00]), ...OK],
+                data: [
+                    ...buildCardData(CARD_NUMBER_BYTES, [0x64, 0x00]),
+                    ...OK,
+                ],
                 tpass: hexToBytes(TPASS_OLD_CARD),
             },
             log,
@@ -191,7 +225,7 @@ describe('readEasyCardChip', () => {
         expect(result.number).toBe('9134 1238 0271 5888');
         expect(result.balance).toBe(100);
         expect(result.tpass?.purchaseDate?.getFullYear()).toBe(2023);
-        expect((result.tpass!.purchaseDate!.getMonth() + 1)).toBe(7);
+        expect(result.tpass!.purchaseDate!.getMonth() + 1).toBe(7);
         expect(result.tpass?.purchaseDate?.getDate()).toBe(1);
 
         expect(log[0]).toEqual(SELECT_APPLET_APDU);
@@ -210,7 +244,7 @@ describe('readEasyCardChip', () => {
         const result = await readEasyCardChip(transceive);
 
         expect(result.tpass?.expiryDate?.getFullYear()).toBe(2023);
-        expect((result.tpass!.expiryDate!.getMonth() + 1)).toBe(7);
+        expect(result.tpass!.expiryDate!.getMonth() + 1).toBe(7);
         expect(result.tpass?.expiryDate?.getDate()).toBe(30);
     });
 
@@ -226,10 +260,10 @@ describe('readEasyCardChip', () => {
 
         // 購買 2026-07-14,啟用 2026-07-21,到期 2026-08-19。
         expect(result.tpass?.purchaseDate?.getFullYear()).toBe(2026);
-        expect((result.tpass!.purchaseDate!.getMonth() + 1)).toBe(7);
+        expect(result.tpass!.purchaseDate!.getMonth() + 1).toBe(7);
         expect(result.tpass?.purchaseDate?.getDate()).toBe(14);
         expect(result.tpass?.expiryDate?.getFullYear()).toBe(2026);
-        expect((result.tpass!.expiryDate!.getMonth() + 1)).toBe(8);
+        expect(result.tpass!.expiryDate!.getMonth() + 1).toBe(8);
         expect(result.tpass?.expiryDate?.getDate()).toBe(19);
     });
 
@@ -266,7 +300,10 @@ describe('readEasyCardChip', () => {
                 return OK;
             }
             if (apdu[1] === 0x30) {
-                return [...buildCardData(CARD_NUMBER_BYTES, [0x64, 0x00]), ...OK];
+                return [
+                    ...buildCardData(CARD_NUMBER_BYTES, [0x64, 0x00]),
+                    ...OK,
+                ];
             }
             throw new Error('RF lost');
         };
@@ -320,5 +357,64 @@ describe('readEasyCardChip', () => {
         await expect(readEasyCardChip(transceive)).rejects.toBeInstanceOf(
             FailedToReadCardError,
         );
+    });
+});
+
+/**
+ * 四張實體卡 applet(GET DATA `80 30`)回應的前 41 個位元組。用途：釘住卡號在
+ * [1..8]、餘額在 [39..40]（含負餘額須以有號數解讀），並確認 [27..29] 的
+ * C4 FF FF (-60) 是固定的透支下限、不是餘額。
+ */
+describe('實體卡 GET DATA 解析', () => {
+    const hex = hexToBytes;
+
+    const CARDS = [
+        {
+            name: '晶片悠遊卡 9122(餘額 0, 持有月票)',
+            data: hex(
+                '01912201883517977711202020201E0600CDC75B8017E87F102700C4FFFF1027000000000000000000',
+            ),
+            number: '9122 0188 3517 9777',
+            balance: 0,
+        },
+        {
+            name: '超級悠遊卡 9134(餘額 0, 持有月票)',
+            data: hex(
+                '02913412380271588811202020201E0C00BC66648017E87F102700C4FFFF1027000000000000000000',
+            ),
+            number: '9134 1238 0271 5888',
+            balance: 0,
+        },
+        {
+            name: '超級悠遊卡 9134(餘額 100, 未買月票)',
+            data: hex(
+                '02913412481711158411202020201E0C000449678017E87F102700C4FFFF1027000000000000006400',
+            ),
+            number: '9134 1248 1711 1584',
+            balance: 100,
+        },
+        {
+            // 負餘額樣本：E3 FF 當無號數會變成 65507，必須以有號數解讀為 -29。
+            name: '晶片悠遊卡 9123(餘額 -29, 透支中)',
+            data: hex(
+                '01912301762340984111202020201E06005EC05980CD6E7F102700C4FFFF102700000000000000E3FF',
+            ),
+            number: '9123 0176 2340 9841',
+            balance: -29,
+        },
+    ];
+
+    test.each(CARDS)(
+        '$name 解出正確的卡號與餘額',
+        ({ data, number, balance }) => {
+            expect(parseEasyCardNumber(data)).toBe(number);
+            expect(parseEasyCardBalance(data)).toBe(balance);
+        },
+    );
+
+    test('[27..29] 的 -60 是透支下限參數，四張卡一致，不是餘額', () => {
+        CARDS.forEach(({ data }) => {
+            expect(data.slice(27, 30)).toEqual([0xc4, 0xff, 0xff]);
+        });
     });
 });

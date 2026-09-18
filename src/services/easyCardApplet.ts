@@ -13,13 +13,17 @@ import { TpassInfo } from '../types';
  */
 
 /** EasyCard application identifier (shared by physical 9122 / 9132 cards). */
-export const EASY_CARD_AID = [
-    0xa0, 0x00, 0x00, 0x03, 0x22, 0x10, 0x07, 0x01,
-];
+export const EASY_CARD_AID = [0xa0, 0x00, 0x00, 0x03, 0x22, 0x10, 0x07, 0x01];
 
 /** SELECT the EasyCard applet by AID. */
 export const SELECT_APPLET_APDU = [
-    0x00, 0xa4, 0x04, 0x00, 0x08, ...EASY_CARD_AID, 0x00,
+    0x00,
+    0xa4,
+    0x04,
+    0x00,
+    0x08,
+    ...EASY_CARD_AID,
+    0x00,
 ];
 
 /**
@@ -69,17 +73,21 @@ export function parseEasyCardNumber(data: number[]): string {
     return digits.replace(/(.{4})(.{4})(.{4})(.{4})/, '$1 $2 $3 $4');
 }
 
-/** Balance = data bytes [39..40] as a little-endian uint16, unit NT$. */
+/**
+ * Balance = data bytes [39..40] as a little-endian SIGNED int16, unit NT$.
+ * 悠遊卡允許餘額透支成負數(例如 -5 存成 `FB FF`),若當無號數讀會變成 65531。
+ * 餘額上限一萬元、負值只有幾十元,int16 足以涵蓋整個值域。
+ */
 export function parseEasyCardBalance(data: number[]): number {
-    return data[39] + data[40] * 256;
+    const unsigned = data[39] + data[40] * 256;
+    return unsigned >= 0x8000 ? unsigned - 0x10000 : unsigned;
 }
 
 /**
  * Decodes an EasyCard transit-date field: the two bytes at `record[offset]` and
  * `record[offset + 1]` in EasyCard's packed date encoding — byte0 = day plus the
  * high month bits, byte1 = year plus the low month bit. This is the SAME packing
- * the MIFARE Classic path decodes, NOT a little-endian Unix timestamp. Verified
- * against a real card's kiosk-printed 定期票購買日 (E1 56 -> 2023-07-01). Returns
+ * the MIFARE Classic path decodes, NOT a little-endian Unix timestamp. Returns
  * null when the field is absent (either byte zero) or the record is too short.
  *
  * Keep the `new Date(\`${year}-${month}-${day}\`)` construction: with unpadded
@@ -87,7 +95,10 @@ export function parseEasyCardBalance(data: number[]): number {
  * day printed on real cards on a Taiwan (UTC+8) device. Do NOT switch to
  * zero-padded/ISO/UTC — that would shift the date a day earlier.
  */
-export function parseTransitDate(record: number[], offset: number): Date | null {
+export function parseTransitDate(
+    record: number[],
+    offset: number,
+): Date | null {
     if (record.length < offset + 2) {
         return null;
     }
@@ -116,17 +127,16 @@ function addDays(date: Date, days: number): Date {
 }
 
 /**
- * 讀取 TPASS 定期票資訊,只讀 SFI5 record 1(`READ_TPASS_PURCHASE_RECORD_APDU`):
- *   - `[4..5]` = 購買日(transit-date 編碼)
- *   - `[6..7]` = 啟用日(transit-date 編碼;為 0 表示「購買即啟用」)
+ * 讀取 TPASS 定期票,只讀 SFI5 record 1:[4..5] 為購買日、[6..7] 為啟用日
+ * (transit-date 編碼;啟用日為 0 表示購買即啟用)。
  *
- * 到期日「沒有直接存在卡上」,必須推算:效期 30 日,末日 = 有效起始日 + 29 天,
- * 有效起始日 = 啟用日(非零時)否則購買日。
- *
- * 為何不用 SFI3 rec2 [12..15]:實測那個欄位是「最後交易時間戳」(帶時分秒,每次刷卡
- * 都會變),並非到期日。舊版誤把它當 LE-unix 到期日解讀,導致到期日永遠顯示成讀卡當天。
+ * 到期日不存在這筆記錄,須推算:效期 30 日,末日 = 有效起始日 + 29 天,有效起始日
+ * 取啟用日、無啟用日則取購買日。卡上其他區塊雖有疑似到期日的欄位,但在晶片悠遊卡
+ * 上為與現行月票無關的殘留值,不可信,故一律推算。
  */
-async function readTpass(transceive: Transceive): Promise<TpassInfo | undefined> {
+async function readTpass(
+    transceive: Transceive,
+): Promise<TpassInfo | undefined> {
     let response: number[];
     try {
         response = await transceive(READ_TPASS_PURCHASE_RECORD_APDU);
