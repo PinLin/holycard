@@ -1,9 +1,11 @@
 import { EasyCardAppletUnavailableError } from '../src/error/easyCardAppletUnavailableError';
 import { FailedToReadCardError } from '../src/error/failedToReadCardError';
+import { IcashUnavailableError } from '../src/error/icashUnavailableError';
 import { MissingNecessaryKeysError } from '../src/error/missingNecessaryKeysError';
 import {
     readCard,
     readViaApplet,
+    readViaIcash,
     readViaServerKeys,
 } from '../src/services/cardReader';
 import type { CardSession } from '../src/services/nfcService';
@@ -13,6 +15,9 @@ jest.mock('../src/services/cardService', () => ({ getCard: jest.fn() }));
 jest.mock('../src/services/easyCardApplet', () => ({
     readEasyCardChip: jest.fn(),
 }));
+jest.mock('../src/services/icashCard', () => ({
+    readIcashCard: jest.fn(),
+}));
 jest.mock('../src/services/nfcService', () => ({
     readBalance: jest.fn(),
     readKuokuangPoints: jest.fn(),
@@ -21,6 +26,7 @@ jest.mock('../src/services/nfcService', () => ({
 
 const { getCard } = require('../src/services/cardService');
 const { readEasyCardChip } = require('../src/services/easyCardApplet');
+const { readIcashCard } = require('../src/services/icashCard');
 const {
     readBalance,
     readKuokuangPoints,
@@ -75,8 +81,9 @@ describe('readCard', () => {
         expect(result.serverKeysUsed).toBe(false);
     });
 
-    test('2. co-branded card (applet 6A82, has MIFARE): falls back to server keys, serverKeysUsed true, balance from readBalance', async () => {
+    test('2. co-branded card (applet 6A82, 非 icash, has MIFARE): falls back to server keys, serverKeysUsed true, balance from readBalance', async () => {
         readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
+        readIcashCard.mockRejectedValue(new IcashUnavailableError());
         getCard.mockResolvedValue(
             makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
         );
@@ -91,15 +98,31 @@ describe('readCard', () => {
         expect(result.serverKeysUsed).toBe(true);
     });
 
-    test('3. applet 6A82 but no MIFARE Classic: EasyCardAppletUnavailableError propagates, MIFARE not connected', async () => {
+    test('2b. icash card (applet 6A82, icash 成功): reads via icash, MIFARE not connected, serverKeysUsed false', async () => {
         readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
+        readIcashCard.mockResolvedValue({ number: '7511 1701 7301 0654', balance: -17 });
+        getCard.mockRejectedValue(new Error('not found'));
+        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+
+        const result = await readCard(session);
+
+        expect(session.connectMifareClassic).not.toHaveBeenCalled();
+        expect(result.card.type).toBe(CardType.ICASH);
+        expect(result.card.number).toBe('7511 1701 7301 0654');
+        expect(result.balance).toBe(-17);
+        expect(result.serverKeysUsed).toBe(false);
+    });
+
+    test('3. applet 6A82 且 icash 也不可用，且無 MIFARE Classic: IcashUnavailableError propagates, MIFARE not connected', async () => {
+        readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
+        readIcashCard.mockRejectedValue(new IcashUnavailableError());
         const session = makeSession({
             hasIsoDep: true,
             hasMifareClassic: false,
         });
 
         await expect(readCard(session)).rejects.toBeInstanceOf(
-            EasyCardAppletUnavailableError,
+            IcashUnavailableError,
         );
         expect(session.connectMifareClassic).not.toHaveBeenCalled();
     });
@@ -161,6 +184,26 @@ describe('readViaApplet', () => {
         expect(result.card.nickname).toBe('');
         expect(result.card.sectors).toEqual([]);
         expect(result.balance).toBe(88);
+        expect(result.serverKeysUsed).toBe(false);
+    });
+});
+
+describe('readViaIcash', () => {
+    test('backend has no record (getCard throws): still succeeds, nickname empty, sectors empty, serverKeysUsed false', async () => {
+        readIcashCard.mockResolvedValue({
+            number: '7511 1701 7301 0654',
+            balance: -17,
+        });
+        getCard.mockRejectedValue(new Error('not found'));
+        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+
+        const result = await readViaIcash(session);
+
+        expect(result.card.type).toBe(CardType.ICASH);
+        expect(result.card.number).toBe('7511 1701 7301 0654');
+        expect(result.card.nickname).toBe('');
+        expect(result.card.sectors).toEqual([]);
+        expect(result.balance).toBe(-17);
         expect(result.serverKeysUsed).toBe(false);
     });
 });

@@ -82,7 +82,9 @@ function showReadInterfaceToast(result: CardReadResult) {
     const message =
         result.serverKeysUsed === true
             ? '透過 MIFARE Classic 介面'
-            : '透過 JavaCard Applet 介面';
+            : result.card.type === CardType.ICASH
+              ? '透過 DESFire 介面'
+              : '透過 JavaCard Applet 介面';
     ToastAndroid.show(message, ToastAndroid.SHORT);
 }
 
@@ -99,7 +101,9 @@ export function getCardBrandImageSource(type: CardType) {
           ? require('../image/easycard.png')
           : type === CardType.HAPPY_CASH
             ? require('../image/happycash.png')
-            : require('../image/unknown.png');
+            : type === CardType.ICASH
+              ? require('../image/icash.png')
+              : require('../image/unknown.png');
 }
 
 function SummaryRow({

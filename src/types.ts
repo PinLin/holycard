@@ -12,6 +12,7 @@ export enum CardType {
     HAPPY_CASH = 'HAPPY_CASH',
     EASY_CARD = 'EASY_CARD',
     I_PASS = 'I_PASS',
+    ICASH = 'ICASH',
 }
 
 export interface CardSector {

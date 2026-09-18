@@ -1,9 +1,11 @@
 import { EasyCardAppletUnavailableError } from '../error/easyCardAppletUnavailableError';
 import { FailedToReadCardError } from '../error/failedToReadCardError';
+import { IcashUnavailableError } from '../error/icashUnavailableError';
 import { MissingNecessaryKeysError } from '../error/missingNecessaryKeysError';
 import { Card, CardReadResult, CardType, TpassInfo } from '../types';
 import { getCard } from './cardService';
 import { readEasyCardChip } from './easyCardApplet';
+import { readIcashCard } from './icashCard';
 import {
     CardSession,
     readBalance,
@@ -40,6 +42,39 @@ export async function readViaApplet(
         card,
         balance: chip.balance,
         tpass: chip.tpass,
+        warnings: [],
+        serverKeysUsed: false,
+    };
+}
+
+/**
+ * icash 2.0(MIFARE DESFire EV1)透過其 DESFire application 免金鑰讀取，不需
+ * 後端金鑰；後端可能沒有此卡紀錄，所以缺後端 metadata 不算失敗。serverKeysUsed = false。
+ */
+export async function readViaIcash(
+    session: CardSession,
+): Promise<CardReadResult> {
+    const icash = await readIcashCard(session.transceive);
+
+    let meta: Card | null = null;
+    try {
+        meta = await getCard(session.uid);
+    } catch (err) {
+        // 免金鑰讀取即使後端查無此卡也成立。
+    }
+
+    const card: Card = {
+        uid: session.uid,
+        type: CardType.ICASH,
+        number: icash.number,
+        nickname: meta?.nickname ?? '',
+        is_kuokuang_card: meta?.is_kuokuang_card ?? false,
+        sectors: meta?.sectors ?? [],
+    };
+
+    return {
+        card,
+        balance: icash.balance,
         warnings: [],
         serverKeysUsed: false,
     };
@@ -87,8 +122,9 @@ export async function readViaServerKeys(
 }
 
 /**
- * 單次感應讀取分流。applet 優先：晶片悠遊卡(IsoDep + applet)免金鑰讀；聯名卡
- * 暴露 IsoDep 但無 applet(6A82)，同一次感應內切到 MIFARE Classic 用後端金鑰；
+ * 單次感應讀取分流。applet 優先：晶片悠遊卡(IsoDep + applet)免金鑰讀；applet
+ * 無回應(6A82)時同一次感應內改試 icash 2.0(DESFire)免金鑰讀；icash 也沒有
+ * 對應 application 時，有 MIFARE Classic 的聯名卡/舊卡才切到後端金鑰路徑；
  * 純舊卡(無 IsoDep)直接走 MIFARE Classic。
  */
 export async function readCard(
@@ -99,8 +135,16 @@ export async function readCard(
         try {
             return await readViaApplet(session);
         } catch (err) {
+            if (!(err instanceof EasyCardAppletUnavailableError)) {
+                throw err;
+            }
+        }
+
+        try {
+            return await readViaIcash(session);
+        } catch (err) {
             if (
-                err instanceof EasyCardAppletUnavailableError &&
+                err instanceof IcashUnavailableError &&
                 session.hasMifareClassic
             ) {
                 await session.connectMifareClassic();
