@@ -1,6 +1,5 @@
 import { EasyCardAppletUnavailableError } from '../error/easyCardAppletUnavailableError';
 import { FailedToReadCardError } from '../error/failedToReadCardError';
-import { IcashUnavailableError } from '../error/icashUnavailableError';
 import { MissingNecessaryKeysError } from '../error/missingNecessaryKeysError';
 import { Card, CardReadResult, CardType, TpassInfo } from '../types';
 import { getCard } from './cardService';
@@ -118,18 +117,41 @@ export async function readViaServerKeys(
         }
     }
 
-    return { card, balance, kuokuangPoints, tpass, warnings, serverKeysUsed: true };
+    return {
+        card,
+        balance,
+        kuokuangPoints,
+        tpass,
+        warnings,
+        serverKeysUsed: true,
+    };
 }
 
 /**
- * 單次感應讀取分流。applet 優先：晶片悠遊卡(IsoDep + applet)免金鑰讀；applet
- * 無回應(6A82)時同一次感應內改試 icash 2.0(DESFire)免金鑰讀；icash 也沒有
- * 對應 application 時，有 MIFARE Classic 的聯名卡/舊卡才切到後端金鑰路徑；
- * 純舊卡(無 IsoDep)直接走 MIFARE Classic。
+ * 單次感應讀取分流。MIFARE Classic 優先：只要卡片有 MIFARE 面向就先走後端金鑰
+ * 路徑，因為那是唯一能同時取得餘額與通勤月票的介面——晶片悠遊卡(9122)的 applet
+ * 只給卡號與餘額，月票僅存在 MIFARE Classic 的第 6、8 磁區。
+ *
+ * 金鑰路徑失敗(後端查無此卡、缺必要金鑰、認證失敗)時，只要卡片還有 IsoDep 就
+ * 退回免金鑰路徑：先試悠遊卡 applet，再試 icash 2.0(DESFire)。這條退路讓後端
+ * 沒有紀錄的晶片卡仍讀得出卡號與餘額。無 IsoDep 的純舊卡則直接把錯誤往上拋。
  */
-export async function readCard(
-    session: CardSession,
-): Promise<CardReadResult> {
+export async function readCard(session: CardSession): Promise<CardReadResult> {
+    if (session.hasMifareClassic) {
+        try {
+            await session.connectMifareClassic();
+            return await readViaServerKeys(session);
+        } catch (err) {
+            // 有 IsoDep 時，金鑰路徑的任何失敗都退回免金鑰 applet：認證失敗造成的
+            // halt 可由 connectIsoDep()(先 close 再 connect)重新 select 復原。
+            // 不分辨錯誤型別也不發降級警告——後端查無此卡與缺金鑰是常態，applet
+            // 補得上；其餘失敗退回後若月票讀不到，寧可安靜少一欄也不丟看不懂的提示。
+            if (!session.hasIsoDep) {
+                throw err;
+            }
+        }
+    }
+
     if (session.hasIsoDep) {
         await session.connectIsoDep();
         try {
@@ -140,23 +162,7 @@ export async function readCard(
             }
         }
 
-        try {
-            return await readViaIcash(session);
-        } catch (err) {
-            if (
-                err instanceof IcashUnavailableError &&
-                session.hasMifareClassic
-            ) {
-                await session.connectMifareClassic();
-                return readViaServerKeys(session);
-            }
-            throw err;
-        }
-    }
-
-    if (session.hasMifareClassic) {
-        await session.connectMifareClassic();
-        return readViaServerKeys(session);
+        return readViaIcash(session);
     }
 
     throw new FailedToReadCardError();

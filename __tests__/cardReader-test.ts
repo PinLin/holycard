@@ -1,3 +1,4 @@
+import { CardUnavailableError } from '../src/error/cardUnavailableError';
 import { EasyCardAppletUnavailableError } from '../src/error/easyCardAppletUnavailableError';
 import { FailedToReadCardError } from '../src/error/failedToReadCardError';
 import { IcashUnavailableError } from '../src/error/icashUnavailableError';
@@ -63,50 +64,68 @@ beforeEach(() => {
 });
 
 describe('readCard', () => {
-    test('1. chip card (IsoDep + applet success): reads via applet, no MIFARE switch, serverKeysUsed false, balance from applet', async () => {
+    test('1. 晶片卡但後端沒有磁區金鑰: 金鑰路徑先試再退回 applet, 餘額取自 applet, serverKeysUsed false', async () => {
         readEasyCardChip.mockResolvedValue({
             number: '9134',
             balance: 111,
             tpass: { purchaseDate: null, expiryDate: null },
         });
         getCard.mockResolvedValue(makeCard({ sectors: [] }));
-        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
-
-        const result = await readCard(session);
-
-        expect(session.connectIsoDep).toHaveBeenCalledTimes(1);
-        expect(session.connectMifareClassic).not.toHaveBeenCalled();
-        expect(readBalance).not.toHaveBeenCalled();
-        expect(result.balance).toBe(111);
-        expect(result.serverKeysUsed).toBe(false);
-    });
-
-    test('2. co-branded card (applet 6A82, 非 icash, has MIFARE): falls back to server keys, serverKeysUsed true, balance from readBalance', async () => {
-        readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
-        readIcashCard.mockRejectedValue(new IcashUnavailableError());
-        getCard.mockResolvedValue(
-            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
-        );
-        readBalance.mockResolvedValue(500);
-        readTpassInfo.mockResolvedValue({ purchaseDate: null, expiryDate: null });
-        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+        readBalance.mockRejectedValue(new MissingNecessaryKeysError());
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
 
         const result = await readCard(session);
 
         expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
-        expect(result.balance).toBe(500);
-        expect(result.serverKeysUsed).toBe(true);
+        expect(session.connectIsoDep).toHaveBeenCalledTimes(1);
+        expect(result.balance).toBe(111);
+        expect(result.serverKeysUsed).toBe(false);
     });
 
-    test('2b. icash card (applet 6A82, icash 成功): reads via icash, MIFARE not connected, serverKeysUsed false', async () => {
-        readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
-        readIcashCard.mockResolvedValue({ number: '7511 1701 7301 0654', balance: -17 });
-        getCard.mockRejectedValue(new Error('not found'));
-        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+    test('2. 聯名卡/舊卡(有 MIFARE + 後端有金鑰): 金鑰路徑直接成功, 完全不碰免金鑰介面', async () => {
+        getCard.mockResolvedValue(
+            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
+        );
+        readBalance.mockResolvedValue(500);
+        readTpassInfo.mockResolvedValue({
+            purchaseDate: null,
+            expiryDate: null,
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
 
         const result = await readCard(session);
 
-        expect(session.connectMifareClassic).not.toHaveBeenCalled();
+        expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
+        expect(readEasyCardChip).not.toHaveBeenCalled();
+        expect(readIcashCard).not.toHaveBeenCalled();
+        expect(result.balance).toBe(500);
+        expect(result.serverKeysUsed).toBe(true);
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('2b. icash card (金鑰路徑失敗後退回, applet 6A82, icash 成功): reads via icash, serverKeysUsed false', async () => {
+        readEasyCardChip.mockRejectedValue(
+            new EasyCardAppletUnavailableError(),
+        );
+        readIcashCard.mockResolvedValue({
+            number: '7511 1701 7301 0654',
+            balance: -17,
+        });
+        getCard.mockRejectedValue(new Error('not found'));
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
         expect(result.card.type).toBe(CardType.ICASH);
         expect(result.card.number).toBe('7511 1701 7301 0654');
         expect(result.balance).toBe(-17);
@@ -114,7 +133,9 @@ describe('readCard', () => {
     });
 
     test('3. applet 6A82 且 icash 也不可用，且無 MIFARE Classic: IcashUnavailableError propagates, MIFARE not connected', async () => {
-        readEasyCardChip.mockRejectedValue(new EasyCardAppletUnavailableError());
+        readEasyCardChip.mockRejectedValue(
+            new EasyCardAppletUnavailableError(),
+        );
         readIcashCard.mockRejectedValue(new IcashUnavailableError());
         const session = makeSession({
             hasIsoDep: true,
@@ -127,14 +148,18 @@ describe('readCard', () => {
         expect(session.connectMifareClassic).not.toHaveBeenCalled();
     });
 
-    test('4. non-applet error (FailedToReadCardError): propagates, no fallback, MIFARE not connected', async () => {
+    test('4. applet 的非 6A82 錯誤: 不退回 icash 也不被吞掉, 直接往上拋', async () => {
+        getCard.mockRejectedValue(new CardUnavailableError());
         readEasyCardChip.mockRejectedValue(new FailedToReadCardError());
-        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
 
         await expect(readCard(session)).rejects.toBeInstanceOf(
             FailedToReadCardError,
         );
-        expect(session.connectMifareClassic).not.toHaveBeenCalled();
+        expect(readIcashCard).not.toHaveBeenCalled();
     });
 
     test('5. legacy card (no IsoDep, has MIFARE): reads via server keys, IsoDep not connected, serverKeysUsed true', async () => {
@@ -142,7 +167,10 @@ describe('readCard', () => {
             makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
         );
         readBalance.mockResolvedValue(300);
-        readTpassInfo.mockResolvedValue({ purchaseDate: null, expiryDate: null });
+        readTpassInfo.mockResolvedValue({
+            purchaseDate: null,
+            expiryDate: null,
+        });
         const session = makeSession({
             hasIsoDep: false,
             hasMifareClassic: true,
@@ -166,6 +194,153 @@ describe('readCard', () => {
             FailedToReadCardError,
         );
     });
+
+    test('9. 晶片悠遊卡 9122(有 MIFARE + 後端有金鑰): 先走金鑰路徑讀到月票, 不呼叫 applet', async () => {
+        getCard.mockResolvedValue(
+            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
+        );
+        readBalance.mockResolvedValue(0);
+        readTpassInfo.mockResolvedValue({
+            purchaseDate: new Date('2026-8-24'),
+            expiryDate: new Date('2026-9-22'),
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
+        expect(readEasyCardChip).not.toHaveBeenCalled();
+        expect(result.balance).toBe(0);
+        expect(result.tpass?.expiryDate).toEqual(new Date('2026-9-22'));
+        expect(result.serverKeysUsed).toBe(true);
+    });
+
+    test('10. 有 MIFARE 但後端無此卡紀錄: 退回 applet 免金鑰路徑', async () => {
+        getCard.mockRejectedValue(new CardUnavailableError());
+        readEasyCardChip.mockResolvedValue({
+            number: '9122 0188 3517 9777',
+            balance: 50,
+            tpass: undefined,
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
+        expect(session.connectIsoDep).toHaveBeenCalledTimes(1);
+        expect(result.card.number).toBe('9122 0188 3517 9777');
+        expect(result.balance).toBe(50);
+        expect(result.serverKeysUsed).toBe(false);
+        // 後端查無此卡是預期情況,免金鑰路徑本來就補得上,不該產生雜訊警告。
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('11. MIFARE 認證失敗(金鑰不符/RF 中斷)且有 IsoDep: 退回 applet', async () => {
+        getCard.mockResolvedValue(
+            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
+        );
+        readBalance.mockRejectedValue(new FailedToReadCardError());
+        readEasyCardChip.mockResolvedValue({
+            number: '9132 0000 0000 0000',
+            balance: 77,
+            tpass: undefined,
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(result.balance).toBe(77);
+        expect(result.serverKeysUsed).toBe(false);
+    });
+
+    test('13. 餘額讀到但月票讀取中斷: 安靜退回 applet, 不產生警告', async () => {
+        getCard.mockResolvedValue(
+            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
+        );
+        readBalance.mockResolvedValue(0);
+        readTpassInfo.mockRejectedValue(new FailedToReadCardError());
+        readEasyCardChip.mockResolvedValue({
+            number: '9122 0188 3517 9777',
+            balance: 0,
+            tpass: undefined,
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(result.tpass).toBeUndefined();
+        // 依產品決定：退回免金鑰路徑一律安靜進行，不對使用者丟降級提示。
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('15. 超級悠遊卡(applet 自帶月票): 金鑰路徑失敗後退回, 月票仍由 applet 補回', async () => {
+        getCard.mockResolvedValue(
+            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
+        );
+        readBalance.mockRejectedValue(new FailedToReadCardError());
+        readEasyCardChip.mockResolvedValue({
+            number: '9132 0000 0000 0000',
+            balance: 350,
+            tpass: {
+                purchaseDate: new Date('2026-8-24'),
+                expiryDate: new Date('2026-9-22'),
+            },
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(result.balance).toBe(350);
+        expect(result.tpass?.expiryDate).toEqual(new Date('2026-9-22'));
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('14. 缺磁區金鑰而退回: 屬預期降級, 不加降級警告', async () => {
+        getCard.mockResolvedValue(makeCard({ sectors: [] }));
+        readBalance.mockRejectedValue(new MissingNecessaryKeysError());
+        readEasyCardChip.mockResolvedValue({
+            number: '9134 0000 0000 0000',
+            balance: 20,
+            tpass: undefined,
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(result.balance).toBe(20);
+        expect(result.warnings).toEqual([]);
+    });
+
+    test('12. 純舊卡(無 IsoDep)金鑰路徑失敗: 錯誤往上拋, 不吞掉', async () => {
+        getCard.mockRejectedValue(new CardUnavailableError());
+        const session = makeSession({
+            hasIsoDep: false,
+            hasMifareClassic: true,
+        });
+
+        await expect(readCard(session)).rejects.toBeInstanceOf(
+            CardUnavailableError,
+        );
+        expect(readEasyCardChip).not.toHaveBeenCalled();
+    });
 });
 
 describe('readViaApplet', () => {
@@ -176,7 +351,10 @@ describe('readViaApplet', () => {
             tpass: undefined,
         });
         getCard.mockRejectedValue(new Error('not found'));
-        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
 
         const result = await readViaApplet(session);
 
@@ -195,7 +373,10 @@ describe('readViaIcash', () => {
             balance: -17,
         });
         getCard.mockRejectedValue(new Error('not found'));
-        const session = makeSession({ hasIsoDep: true, hasMifareClassic: true });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
 
         const result = await readViaIcash(session);
 
