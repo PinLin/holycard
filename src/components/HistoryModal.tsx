@@ -93,8 +93,6 @@ export function HistoryModal({
                                             <Text
                                                 style={styles.historyCardNumber}
                                                 numberOfLines={1}
-                                                adjustsFontSizeToFit
-                                                minimumFontScale={0.7}
                                             >
                                                 {entry.card.number}
                                             </Text>
@@ -192,7 +190,7 @@ const baseStyles = {
         flex: 1,
     },
     historyCardNumber: {
-        fontSize: 20,
+        fontSize: 16,
         marginBottom: 4,
         flexShrink: 1,
     },

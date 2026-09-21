@@ -14,9 +14,9 @@ const TECH_ISO_DEP = 'android.nfc.tech.IsoDep';
 const TECH_MIFARE_CLASSIC = 'android.nfc.tech.MifareClassic';
 
 // NfcAdapter reader-mode flags: NFC_A (0x1) + SKIP_NDEF_CHECK (0x80) +
-// NO_PLATFORM_SOUNDS (0x100), summed as they are disjoint bits. Reader mode
-// makes this app own the NFC field exclusively (no other app can grab the tag)
-// and avoids the foreground-dispatch onPause/onResume churn.
+// NO_PLATFORM_SOUNDS (0x100), summed as they are disjoint bits. Only consulted
+// when reader mode is enabled; the scanner uses foreground dispatch, so these
+// are passed but ignored.
 const READER_MODE_FLAGS = 0x1 + 0x80 + 0x100;
 
 export function initializeNfc() {
@@ -92,11 +92,11 @@ export interface CardScanHandlers<T> {
 }
 
 /**
- * Starts CONTINUOUS single-tap card scanning in reader mode. Registers reader
- * mode ONCE and keeps it registered: the reader-mode presence check fires
- * DiscoverTag only once while a card rests on the reader, so each card is read
- * once per tap (no re-read storm) and a fresh tap reads the next card. Reader
- * mode also owns the NFC field exclusively so other NFC apps can't grab the tag.
+ * Starts CONTINUOUS single-tap card scanning via foreground dispatch. Registers
+ * the tag event ONCE and keeps it registered: DiscoverTag fires per tap and a
+ * fresh tap reads the next card (a `busy` guard drops re-entrant events while a
+ * read is in flight). Foreground dispatch is used over reader mode because some
+ * NXP/Samsung controllers fail MIFARE Classic authentication under reader mode.
  *
  * The handler talks IsoDep (chip EasyCard applet) and/or switches to MIFARE
  * Classic (legacy / co-branded) on the same card via `session`. Per-tap cleanup
@@ -179,7 +179,7 @@ export function startCardScanning<T>(
     handlers.onReady?.();
     nfcManager
         .registerTagEvent({
-            isReaderModeEnabled: true,
+            isReaderModeEnabled: false,
             readerModeFlags: READER_MODE_FLAGS,
             readerModeDelay: 5,
         })
