@@ -33,7 +33,7 @@ The app follows a layered service-oriented pattern:
 
 **`src/service/nfc.service.ts`** — All NFC operations: MIFARE Classic sector authentication with hex keys, block reading, balance extraction, TPASS pass info parsing, and Kuokuang point reading. This is where card-specific sector/block logic lives.
 
-**`src/service/card.service.ts`** — Fetches card metadata from `https://card.pinlin.me/card/{uid}`, caches results locally via `react-native-keychain`.
+**`src/service/card.service.ts`** — Fetches card metadata (including MIFARE keys) from the user-configured key source URL as `{url}/{uid}`, caches results locally via `react-native-keychain`.
 
 **`src/model/card.model.ts`** — Core interfaces: `Card`, `CardType` enum (`UNKNOWN`, `HAPPY_CASH`, `EASY_CARD`, `I_PASS`), `CardSector`.
 

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
+import { MenuView } from '@react-native-menu/menu';
 import {
-    Pressable,
     StatusBar,
     StyleSheet,
     Text,
@@ -11,23 +11,27 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardResultModal } from '../components/CardResultModal';
 import { HistoryModal } from '../components/HistoryModal';
+import { KeyServerModal } from '../components/KeyServerModal';
 import { useCardReader } from '../hooks/useCardReader';
+import { deleteHistoryEntry, loadHistory } from '../services/historyStorage';
 import {
-    deleteHistoryEntry,
-    loadHistory,
-} from '../services/historyStorage';
+    loadKeyServerUrl,
+    saveKeyServerUrl,
+} from '../services/settingsStorage';
 import { CardReadResult } from '../types';
 
 export function CardReaderScreen() {
     const colorScheme = useColorScheme() ?? 'light';
     const isDarkMode = colorScheme === 'dark';
     const styles = isDarkMode ? darkThemeStyles : lightThemeStyles;
+    const insets = useSafeAreaInsets();
     const [history, setHistory] = React.useState<CardReadResult[]>([]);
     const [historyVisible, setHistoryVisible] = React.useState(false);
-    const insets = useSafeAreaInsets();
     const [historySearch, setHistorySearch] = React.useState('');
     const [selectedHistoryEntry, setSelectedHistoryEntry] =
         React.useState<CardReadResult | null>(null);
+    const [keyServerVisible, setKeyServerVisible] = React.useState(false);
+    const [keyServerUrl, setKeyServerUrl] = React.useState<string | null>(null);
     const {
         status,
         result,
@@ -46,6 +50,12 @@ export function CardReaderScreen() {
         loadHistory()
             .then(setHistory)
             .catch(() => setHistory([]));
+    }, []);
+
+    useEffect(() => {
+        loadKeyServerUrl()
+            .then(setKeyServerUrl)
+            .catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -89,12 +99,27 @@ export function CardReaderScreen() {
             >
                 <View style={styles.header}>
                     <Text style={styles.appName}>HolyCard</Text>
-                    <Pressable
-                        onPress={() => setHistoryVisible(true)}
-                        style={styles.historyButton}
+                    <MenuView
+                        actions={[
+                            { id: 'history', title: '歷史紀錄' },
+                            { id: 'key-server', title: '編輯金鑰來源' },
+                        ]}
+                        onPressAction={({ nativeEvent }) => {
+                            if (nativeEvent.event === 'history') {
+                                setHistoryVisible(true);
+                            } else if (nativeEvent.event === 'key-server') {
+                                setKeyServerVisible(true);
+                            }
+                        }}
                     >
-                        <Text style={styles.historyButtonText}>歷史</Text>
-                    </Pressable>
+                        <View
+                            style={styles.menuButton}
+                            accessible
+                            accessibilityLabel="選單"
+                        >
+                            <Text style={styles.menuButtonText}>⋮</Text>
+                        </View>
+                    </MenuView>
                 </View>
                 <View style={styles.centerView}>
                     <Text style={styles.centerText}>
@@ -102,6 +127,25 @@ export function CardReaderScreen() {
                     </Text>
                 </View>
             </View>
+            <KeyServerModal
+                visible={keyServerVisible}
+                darkMode={isDarkMode}
+                currentUrl={keyServerUrl}
+                onClose={() => setKeyServerVisible(false)}
+                onSave={async (url) => {
+                    try {
+                        await saveKeyServerUrl(url);
+                        setKeyServerUrl(url);
+                        setKeyServerVisible(false);
+                        ToastAndroid.show(
+                            url ? '已儲存金鑰來源' : '已清除金鑰來源',
+                            ToastAndroid.SHORT,
+                        );
+                    } catch {
+                        ToastAndroid.show('儲存失敗', ToastAndroid.SHORT);
+                    }
+                }}
+            />
             <HistoryModal
                 visible={historyVisible}
                 darkMode={isDarkMode}
@@ -163,13 +207,13 @@ const baseStyles = {
         fontSize: 24,
         fontWeight: '600' as const,
     },
-    historyButton: {
-        paddingHorizontal: 8,
-        paddingVertical: 6,
+    menuButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
     },
-    historyButtonText: {
-        fontSize: 18,
-        fontWeight: '500' as const,
+    menuButtonText: {
+        fontSize: 24,
+        fontWeight: '600' as const,
     },
     centerView: {
         flex: 1,
@@ -192,9 +236,9 @@ const lightThemeStyles = StyleSheet.create({
         ...baseStyles.appName,
         color: 'black',
     },
-    historyButton: baseStyles.historyButton,
-    historyButtonText: {
-        ...baseStyles.historyButtonText,
+    menuButton: baseStyles.menuButton,
+    menuButtonText: {
+        ...baseStyles.menuButtonText,
         color: 'black',
     },
     centerView: baseStyles.centerView,
@@ -214,9 +258,9 @@ const darkThemeStyles = StyleSheet.create({
         ...baseStyles.appName,
         color: 'white',
     },
-    historyButton: baseStyles.historyButton,
-    historyButtonText: {
-        ...baseStyles.historyButtonText,
+    menuButton: baseStyles.menuButton,
+    menuButtonText: {
+        ...baseStyles.menuButtonText,
         color: 'white',
     },
     centerView: baseStyles.centerView,
