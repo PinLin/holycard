@@ -8,6 +8,7 @@ import {
     useColorScheme,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardResultModal } from '../components/CardResultModal';
 import { HistoryModal } from '../components/HistoryModal';
 import { useCardReader } from '../hooks/useCardReader';
@@ -23,6 +24,7 @@ export function CardReaderScreen() {
     const styles = isDarkMode ? darkThemeStyles : lightThemeStyles;
     const [history, setHistory] = React.useState<CardReadResult[]>([]);
     const [historyVisible, setHistoryVisible] = React.useState(false);
+    const insets = useSafeAreaInsets();
     const [historySearch, setHistorySearch] = React.useState('');
     const [selectedHistoryEntry, setSelectedHistoryEntry] =
         React.useState<CardReadResult | null>(null);
@@ -75,7 +77,16 @@ export function CardReaderScreen() {
                 barStyle={isDarkMode ? 'light-content' : 'dark-content'}
                 backgroundColor={isDarkMode ? 'black' : 'white'}
             />
-            <View style={styles.body}>
+            {/* targetSdk 35 起畫面會延伸到系統列底下，留白要加上系統列高度。 */}
+            <View
+                style={[
+                    styles.body,
+                    {
+                        paddingTop: styles.body.paddingTop + insets.top,
+                        paddingBottom: insets.bottom,
+                    },
+                ]}
+            >
                 <View style={styles.header}>
                     <Text style={styles.appName}>HolyCard</Text>
                     <Pressable
