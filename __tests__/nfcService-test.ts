@@ -1,13 +1,31 @@
+import { CardLostError } from '../src/error/cardLostError';
+import { FailedToReadCardError } from '../src/error/failedToReadCardError';
 import { MissingNecessaryKeysError } from '../src/error/missingNecessaryKeysError';
-import { readBalance, readTpassInfo } from '../src/services/nfcService';
+import {
+    CardSession,
+    readBalance,
+    readTpassInfo,
+    startCardScanning,
+} from '../src/services/nfcService';
 import { Card, CardType } from '../src/types';
 
 const mockAuthenticateA = jest.fn();
 const mockReadBlock = jest.fn();
+const mockConnect = jest.fn();
+const mockTransceive = jest.fn();
+let mockTagListener: ((tag: unknown) => Promise<void>) | null = null;
 
 jest.mock('react-native-nfc-manager', () => ({
     __esModule: true,
     default: {
+        setEventListener: (_event: string, listener: never) => {
+            mockTagListener = listener;
+        },
+        registerTagEvent: () => Promise.resolve(),
+        unregisterTagEvent: () => Promise.resolve(),
+        close: () => Promise.resolve(),
+        connect: (...args: unknown[]) => mockConnect(...args),
+        transceive: (...args: unknown[]) => mockTransceive(...args),
         mifareClassicHandlerAndroid: {
             mifareClassicAuthenticateA: (...args: unknown[]) =>
                 mockAuthenticateA(...args),
@@ -138,5 +156,135 @@ describe('readTpassInfo (實體 9122 卡資料)', () => {
         await expect(readTpassInfo(makeCard([2, 6]))).rejects.toBeInstanceOf(
             MissingNecessaryKeysError,
         );
+    });
+});
+
+// 原生錯誤字串（react-native-nfc-manager 3.16.1 ＋ patches/ 的補丁）。
+const AUTH_FAIL = 'mifareClassicAuthenticate fail: AUTH_FAIL';
+const AUTH_TAG_LOST = 'mifareClassicAuthenticate fail: TAG_LOST';
+
+describe('MIFARE 讀取錯誤分類', () => {
+    test('金鑰被拒（AUTH_FAIL）是可重試的 FailedToReadCardError', async () => {
+        mockAuthenticateA.mockRejectedValue(new Error(AUTH_FAIL));
+        await expect(readBalance(makeCard([2]))).rejects.toBeInstanceOf(
+            FailedToReadCardError,
+        );
+    });
+
+    test('卡已離開（TAG_LOST）是 CardLostError', async () => {
+        mockAuthenticateA.mockRejectedValue(new Error(AUTH_TAG_LOST));
+        await expect(readBalance(makeCard([2]))).rejects.toBeInstanceOf(
+            CardLostError,
+        );
+    });
+});
+
+describe('startCardScanning 重試策略', () => {
+    const TAG = {
+        id: 'A13FD62C',
+        techTypes: [
+            'android.nfc.tech.IsoDep',
+            'android.nfc.tech.MifareClassic',
+        ],
+    };
+
+    async function tapWith(handler: (session: CardSession) => Promise<string>) {
+        const onResult = jest.fn();
+        const onError = jest.fn();
+        const scan = startCardScanning(handler, { onResult, onError });
+        await mockTagListener!(TAG);
+        await scan.stop();
+        return { onResult, onError };
+    }
+
+    test('卡片在場的暫時性失敗會重試，之後成功', async () => {
+        const handler = jest
+            .fn()
+            .mockRejectedValueOnce(new FailedToReadCardError())
+            .mockResolvedValue('ok');
+        const { onResult, onError } = await tapWith(handler);
+        expect(handler).toHaveBeenCalledTimes(2);
+        expect(onResult).toHaveBeenCalledWith('ok');
+        expect(onError).not.toHaveBeenCalled();
+    });
+
+    test('MIFARE 讀取回報卡已離開：不重試，回報 CardLostError', async () => {
+        const handler = jest.fn().mockRejectedValue(new CardLostError());
+        const { onError } = await tapWith(handler);
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0]).toBeInstanceOf(CardLostError);
+    });
+
+    test('applet 把 transceive 的 TAG_LOST 包成 FailedToReadCardError 時，仍視為卡已離開', async () => {
+        mockTransceive.mockRejectedValue(
+            new Error('transceive fail: TAG_LOST'),
+        );
+        const handler = jest.fn(async (session: CardSession) => {
+            try {
+                await session.transceive([0x00]);
+            } catch (error) {
+                throw new FailedToReadCardError();
+            }
+            return 'unreachable';
+        });
+        const { onError } = await tapWith(handler);
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0]).toBeInstanceOf(CardLostError);
+    });
+
+    test('一般 transceive 失敗（非 TAG_LOST）照常重試', async () => {
+        mockTransceive
+            .mockRejectedValueOnce(new Error('transceive fail'))
+            .mockResolvedValue([0x90, 0x00]);
+        const handler = jest.fn(async (session: CardSession) => {
+            try {
+                await session.transceive([0x00]);
+            } catch (error) {
+                throw new FailedToReadCardError();
+            }
+            return 'ok';
+        });
+        const { onResult } = await tapWith(handler);
+        expect(handler).toHaveBeenCalledTimes(2);
+        expect(onResult).toHaveBeenCalledWith('ok');
+    });
+
+    test('connect 暫時失敗一次、第二次連上：照常讀取', async () => {
+        mockConnect
+            .mockRejectedValueOnce(new Error('connect fail: TAG_LOST'))
+            .mockResolvedValue(undefined);
+        const handler = jest.fn(async (session: CardSession) => {
+            await session.connectMifareClassic();
+            return 'ok';
+        });
+        const { onResult } = await tapWith(handler);
+        expect(mockConnect).toHaveBeenCalledTimes(2);
+        expect(onResult).toHaveBeenCalledWith('ok');
+    });
+
+    test('transceive 曾 TAG_LOST，但 handler 最後丟的是別種錯誤：照原樣回報', async () => {
+        mockTransceive.mockRejectedValue(
+            new Error('transceive fail: TAG_LOST'),
+        );
+        const otherError = new Error('查無金鑰');
+        const handler = jest.fn(async (session: CardSession) => {
+            try {
+                await session.transceive([0x00]);
+            } catch (error) {}
+            throw otherError;
+        });
+        const { onError } = await tapWith(handler);
+        expect(onError).toHaveBeenCalledWith(otherError);
+    });
+
+    test('connect 連續失敗（補丁回報 TAG_LOST）轉成 CardLostError，不重試', async () => {
+        mockConnect.mockRejectedValue(new Error('connect fail: TAG_LOST'));
+        const handler = jest.fn(async (session: CardSession) => {
+            await session.connectMifareClassic();
+            return 'unreachable';
+        });
+        const { onError } = await tapWith(handler);
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0]).toBeInstanceOf(CardLostError);
     });
 });

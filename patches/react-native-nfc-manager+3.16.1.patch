@@ -1,0 +1,33 @@
+diff --git a/node_modules/react-native-nfc-manager/android/src/main/java/community/revteltech/nfc/NfcManager.java b/node_modules/react-native-nfc-manager/android/src/main/java/community/revteltech/nfc/NfcManager.java
+index 76481b8..db5a49c 100644
+--- a/node_modules/react-native-nfc-manager/android/src/main/java/community/revteltech/nfc/NfcManager.java
++++ b/node_modules/react-native-nfc-manager/android/src/main/java/community/revteltech/nfc/NfcManager.java
+@@ -747,9 +747,15 @@ class NfcManager extends ReactContextBaseJavaModule implements ActivityEventList
+     public void connect(ReadableArray techs, Callback callback){
+         synchronized(this) {
+             try {
+-                techRequest = new TagTechnologyRequest(techs.toArrayList(), callback);
+-                techRequest.connect(this.tag);
+-                callback.invoke(null, null);
++                // No pending callback: this one is answered right here, and a later
++                // tag intent must not invoke it a second time (RN aborts on that).
++                techRequest = new TagTechnologyRequest(techs.toArrayList(), null);
++                if (techRequest.connect(this.tag)) {
++                    callback.invoke(null, null);
++                } else {
++                    techRequest = null;
++                    callback.invoke("connect fail: TAG_LOST");
++                }
+             } catch (Exception ex) {
+                 callback.invoke(ex.toString());
+             }
+@@ -832,6 +838,9 @@ class NfcManager extends ReactContextBaseJavaModule implements ActivityEventList
+                     }
+                     Log.d(LOG_TAG, "transceive not supported");
+                     callback.invoke(ERR_API_NOT_SUPPORT);
++                } catch (TagLostException ex) {
++                    Log.d(LOG_TAG, "transceive fail: " + ex);
++                    callback.invoke(ERR_TRANSCEIVE_FAIL + ": TAG_LOST");
+                 } catch (Exception ex) {
+                     Log.d(LOG_TAG, "transceive fail: " + ex);
+                     callback.invoke(ERR_TRANSCEIVE_FAIL);

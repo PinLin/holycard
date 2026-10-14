@@ -1,6 +1,7 @@
 import nfcManager, { NfcEvents, NfcTech } from 'react-native-nfc-manager';
 // @ts-ignore internal module, no bundled types
 import { callNative } from 'react-native-nfc-manager/src/NativeNfcManager';
+import { CardLostError } from '../error/cardLostError';
 import { FailedToReadCardError } from '../error/failedToReadCardError';
 import { MissingNecessaryKeysError } from '../error/missingNecessaryKeysError';
 import { Card, TpassInfo } from '../types';
@@ -18,6 +19,38 @@ const TECH_MIFARE_CLASSIC = 'android.nfc.tech.MifareClassic';
 // when reader mode is enabled; the scanner uses foreground dispatch, so these
 // are passed but ignored.
 const READER_MODE_FLAGS = 0x1 + 0x80 + 0x100;
+
+// 原生回報卡已離開（TAG_LOST，含已打補丁的 connect／transceive）或連線已不存在。
+// 這種情況同一次感應內重試不會好，只能請使用者重刷。
+function isTagLostError(error: unknown): boolean {
+    const message = String((error as Error)?.message ?? error);
+    return (
+        message.includes('TAG_LOST') ||
+        message.includes('no tech request available')
+    );
+}
+
+const CONNECT_ATTEMPTS = 2;
+
+// connect 失敗不一定是卡離開（SmartMX 偶爾會暫時連不上），先多試一次再下結論。
+async function connectTech(tech: NfcTech) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            await nfcManager.close();
+        } catch (error) {}
+        try {
+            await nfcManager.connect([tech]);
+            return;
+        } catch (error) {
+            if (!isTagLostError(error)) {
+                throw error;
+            }
+            if (attempt >= CONNECT_ATTEMPTS) {
+                throw new CardLostError();
+            }
+        }
+    }
+}
 
 export function initializeNfc() {
     return nfcManager.start();
@@ -121,38 +154,46 @@ export function startCardScanning<T>(
         handlers.onReading?.();
 
         const techTypes: string[] = tag?.techTypes || [];
+        // applet／icash 會把 transceive 錯誤一律轉成 FailedToReadCardError，
+        // 所以卡離開的事實記在這裡，讓下面的重試迴圈看得到。
+        let tagLost = false;
         const session: CardSession = {
             uid: tag?.id ?? '',
             techTypes,
             hasIsoDep: techTypes.includes(TECH_ISO_DEP),
             hasMifareClassic: techTypes.includes(TECH_MIFARE_CLASSIC),
-            connectIsoDep: async () => {
-                // Close any tech already open (e.g. MifareClassic from a prior
-                // retry) so this is a clean re-select, not a live tech switch.
+            // Close any tech already open (e.g. MifareClassic from a prior retry)
+            // so each connect is a clean re-select, not a live tech switch.
+            connectIsoDep: () => connectTech(NfcTech.IsoDep),
+            connectMifareClassic: () => connectTech(NfcTech.MifareClassic),
+            transceive: async (apdu) => {
                 try {
-                    await nfcManager.close();
-                } catch (error) {}
-                await nfcManager.connect([NfcTech.IsoDep]);
+                    return await nfcManager.transceive(apdu);
+                } catch (error) {
+                    if (isTagLostError(error)) {
+                        tagLost = true;
+                    }
+                    throw error;
+                }
             },
-            connectMifareClassic: async () => {
-                try {
-                    await nfcManager.close();
-                } catch (error) {}
-                await nfcManager.connect([NfcTech.MifareClassic]);
-            },
-            transceive: (apdu) => nfcManager.transceive(apdu),
         };
 
         try {
             let retryCount = 0;
             for (;;) {
+                tagLost = false;
                 try {
                     const result = await handler(session);
                     if (!stopped) {
                         handlers.onResult(result);
                     }
                     break;
-                } catch (error) {
+                } catch (caught) {
+                    // 只改寫被 applet／icash 包起來的錯誤，其他型別（例如查無金鑰）照原樣回報。
+                    const error =
+                        tagLost && caught instanceof FailedToReadCardError
+                            ? new CardLostError()
+                            : caught;
                     if (
                         error instanceof FailedToReadCardError &&
                         retryCount < MAX_READ_RETRIES
@@ -222,8 +263,11 @@ async function authenticateWithKeyA(sector: number, keyA: string) {
             convertKey(keyA),
         );
     } catch (error) {
-        // Any auth failure (wrong key, lost tag, RF glitch) must abort this read
-        // rather than silently falling through to read an unauthenticated block.
+        // Any auth failure must abort this read rather than silently falling
+        // through to read an unauthenticated block.
+        if (isTagLostError(error)) {
+            throw new CardLostError();
+        }
         throw new FailedToReadCardError();
     }
 }
@@ -236,6 +280,9 @@ async function readBlock(block: number): Promise<number[]> {
                 block as never,
             )) as number[];
     } catch (error) {
+        if (isTagLostError(error)) {
+            throw new CardLostError();
+        }
         throw new FailedToReadCardError();
     }
 

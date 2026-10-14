@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Vibration } from 'react-native';
+import { CardLostError } from '../error/cardLostError';
 import { CardUnavailableError } from '../error/cardUnavailableError';
 import { KeyServerNotSetError } from '../error/keyServerNotSetError';
 import { readCard } from '../services/cardReader';
@@ -51,6 +52,8 @@ export function useCardReader() {
                 setResult(null);
                 if (err instanceof KeyServerNotSetError) {
                     setError('這張卡需要金鑰，請先從右上角選單設定金鑰來源');
+                } else if (err instanceof CardLostError) {
+                    setError('卡片已離開，請重新感應');
                 } else if (err instanceof CardUnavailableError) {
                     setError('找不到這張卡片的資訊，無法讀取');
                 } else {
