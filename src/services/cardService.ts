@@ -2,7 +2,7 @@ import * as Keychain from 'react-native-keychain';
 import { Card } from '../types';
 import { CardUnavailableError } from '../error/cardUnavailableError';
 import { KeyServerNotSetError } from '../error/keyServerNotSetError';
-import { loadKeyServerUrl } from './settingsStorage';
+import { buildKeyUrl, loadKeyServerUrl } from './settingsStorage';
 
 // 快取依伺服器分開，換伺服器時不會讀到別台的舊金鑰。
 function getCacheService(serverUrl: string, uid: string) {
@@ -10,7 +10,7 @@ function getCacheService(serverUrl: string, uid: string) {
 }
 
 async function fetchCard(serverUrl: string, uid: string): Promise<Card> {
-    const response = await fetch(`${serverUrl}/${uid}`);
+    const response = await fetch(buildKeyUrl(serverUrl, uid));
     if (!response.ok) {
         throw new CardUnavailableError();
     }

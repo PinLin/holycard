@@ -7,7 +7,10 @@ import {
     TextInput,
     View,
 } from 'react-native';
-import { normalizeKeyServerUrl } from '../services/settingsStorage';
+import {
+    hasUidPlaceholder,
+    normalizeKeyServerUrl,
+} from '../services/settingsStorage';
 
 interface KeyServerModalProps {
     visible: boolean;
@@ -36,6 +39,7 @@ export function KeyServerModal({
     }, [visible, currentUrl]);
 
     const unchanged = input.trim() === (currentUrl ?? '');
+    const missingPlaceholder = input.trim() !== '' && !hasUidPlaceholder(input);
 
     const handleSave = () => {
         if (input.trim() === '') {
@@ -67,7 +71,7 @@ export function KeyServerModal({
                                 setInput(value);
                                 setInvalid(false);
                             }}
-                            placeholder="https://"
+                            placeholder="https://…/{uid}"
                             placeholderTextColor={darkMode ? '#777' : '#999'}
                             autoCapitalize="none"
                             autoCorrect={false}
@@ -89,10 +93,16 @@ export function KeyServerModal({
                             </Pressable>
                         )}
                     </View>
-                    {invalid && (
+                    {invalid ? (
                         <Text style={styles.error}>
                             請輸入 http:// 或 https:// 開頭的網址
                         </Text>
+                    ) : (
+                        missingPlaceholder && (
+                            <Text style={styles.warning}>
+                                {'網址裡沒有 {uid}，儲存時會在結尾加上 /{uid}'}
+                            </Text>
+                        )
                     )}
                     <View style={styles.actions}>
                         <Pressable
@@ -173,6 +183,10 @@ const baseStyles = {
         fontSize: 14,
         marginTop: 8,
     },
+    warning: {
+        fontSize: 14,
+        marginTop: 8,
+    },
     actions: {
         flexDirection: 'row' as const,
         justifyContent: 'flex-end' as const,
@@ -210,6 +224,7 @@ const lightThemeStyles = StyleSheet.create({
     inputBox: { ...baseStyles.inputBox, borderColor: '#D8D8D8' },
     input: { ...baseStyles.input, color: 'black' },
     clearText: { ...baseStyles.clearText, color: '#8A8A8A' },
+    warning: { ...baseStyles.warning, color: '#9A5B00' },
     cancelText: { ...baseStyles.cancelText, color: '#555' },
     saveButton: { ...baseStyles.saveButton, backgroundColor: '#1F1F1F' },
     saveButtonDisabled: { backgroundColor: '#E0E0E0' },
@@ -224,6 +239,7 @@ const darkThemeStyles = StyleSheet.create({
     inputBox: { ...baseStyles.inputBox, borderColor: '#4A4A4A' },
     input: { ...baseStyles.input, color: 'white' },
     clearText: { ...baseStyles.clearText, color: '#9A9A9A' },
+    warning: { ...baseStyles.warning, color: '#FFB74D' },
     cancelText: { ...baseStyles.cancelText, color: '#DDD' },
     saveButton: { ...baseStyles.saveButton, backgroundColor: '#E8E8E8' },
     saveButtonDisabled: { backgroundColor: '#4A4A4A' },

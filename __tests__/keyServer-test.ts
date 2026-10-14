@@ -3,6 +3,8 @@ import * as Keychain from 'react-native-keychain';
 import { KeyServerNotSetError } from '../src/error/keyServerNotSetError';
 import { getCard } from '../src/services/cardService';
 import {
+    buildKeyUrl,
+    hasUidPlaceholder,
     loadKeyServerUrl,
     normalizeKeyServerUrl,
     saveKeyServerUrl,
@@ -41,8 +43,17 @@ beforeEach(() => {
 
 describe('normalizeKeyServerUrl', () => {
     test('trims spaces and trailing slashes', () => {
-        expect(normalizeKeyServerUrl('  https://keys.example.com/api/ ')).toBe(
-            'https://keys.example.com/api',
+        expect(
+            normalizeKeyServerUrl('  https://keys.example.com/api/{uid}/ '),
+        ).toBe('https://keys.example.com/api/{uid}');
+    });
+
+    test('沒有 {uid} 時在結尾補上 /{uid}（含舊設定）', () => {
+        expect(normalizeKeyServerUrl('https://card.example.com/card/')).toBe(
+            'https://card.example.com/card/{uid}',
+        );
+        expect(normalizeKeyServerUrl('http://192.168.1.10:8080')).toBe(
+            'http://192.168.1.10:8080/{uid}',
         );
     });
 
@@ -58,16 +69,49 @@ describe('normalizeKeyServerUrl', () => {
     });
 
     test('lowercases scheme and host but keeps the path', () => {
-        expect(normalizeKeyServerUrl('HTTPS://Keys.Example.com/')).toBe(
-            'https://keys.example.com',
+        expect(normalizeKeyServerUrl('HTTPS://Keys.Example.com/{uid}')).toBe(
+            'https://keys.example.com/{uid}',
         );
-        expect(normalizeKeyServerUrl('https://A.example.com/Keys')).toBe(
-            'https://a.example.com/Keys',
+        expect(normalizeKeyServerUrl('https://A.example.com/Keys/{uid}')).toBe(
+            'https://a.example.com/Keys/{uid}',
+        );
+    });
+});
+
+describe('{uid} 佔位符', () => {
+    test('網址有 {uid} 時替換成 UID，可放在路徑中間或帶副檔名', () => {
+        expect(
+            buildKeyUrl('https://nas.local/keys/{uid}.json', 'A13FD62C'),
+        ).toBe('https://nas.local/keys/A13FD62C.json');
+        expect(buildKeyUrl('https://h/{uid}/card/{uid}', '55E99122')).toBe(
+            'https://h/55E99122/card/55E99122',
+        );
+    });
+
+    test('只認小寫的 {uid}', () => {
+        expect(hasUidPlaceholder('https://h/{uid}.json')).toBe(true);
+        expect(hasUidPlaceholder('https://h/{UID}.json')).toBe(false);
+        expect(hasUidPlaceholder('https://h/uid.json')).toBe(false);
+    });
+
+    test('正規化保留 {uid}，照樣去結尾斜線、主機轉小寫', () => {
+        expect(
+            normalizeKeyServerUrl(' HTTPS://NAS.Local/Keys/{uid}.json/ '),
+        ).toBe('https://nas.local/Keys/{uid}.json');
+        expect(normalizeKeyServerUrl('https://{uid}.keys.example.com')).toBe(
+            'https://{uid}.keys.example.com',
         );
     });
 });
 
 describe('key server setting', () => {
+    test('舊版存的網址（沒有 {uid}）讀出時補上 /{uid}', async () => {
+        mockedGetItem.mockResolvedValueOnce('https://card.example.com/card');
+        expect(await loadKeyServerUrl()).toBe(
+            'https://card.example.com/card/{uid}',
+        );
+    });
+
     test('is null when nothing or garbage is stored', async () => {
         mockedGetItem.mockResolvedValueOnce(null);
         expect(await loadKeyServerUrl()).toBeNull();
@@ -107,7 +151,7 @@ describe('getCard with key server', () => {
     });
 
     test('configured server is queried and cached per server', async () => {
-        mockedGetItem.mockResolvedValue('https://keys.example.com');
+        mockedGetItem.mockResolvedValue('https://keys.example.com/{uid}');
         mockedGetPassword.mockResolvedValue(false);
 
         await getCard('ABCD1234');
@@ -116,12 +160,23 @@ describe('getCard with key server', () => {
             'https://keys.example.com/ABCD1234',
         );
         expect(mockedGetPassword).toHaveBeenCalledWith({
-            service: 'card:https://keys.example.com:ABCD1234',
+            service: 'card:https://keys.example.com/{uid}:ABCD1234',
         });
     });
 
+    test('網址樣板的 {uid} 被替換後才送出請求', async () => {
+        mockedGetItem.mockResolvedValue('https://nas.local/keys/{uid}.json');
+        mockedGetPassword.mockResolvedValue(false);
+
+        await getCard('ABCD1234');
+
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+            'https://nas.local/keys/ABCD1234.json',
+        );
+    });
+
     test('cached keys are returned and refreshed from the same server', async () => {
-        mockedGetItem.mockResolvedValue('https://keys.example.com');
+        mockedGetItem.mockResolvedValue('https://keys.example.com/{uid}');
         mockedGetPassword.mockResolvedValue({
             password: JSON.stringify({ ...card, nickname: 'cached' }),
         });
@@ -134,7 +189,7 @@ describe('getCard with key server', () => {
             'https://keys.example.com/ABCD1234',
         );
         expect(mockedSetPassword.mock.calls[0][2].service).toBe(
-            'card:https://keys.example.com:ABCD1234',
+            'card:https://keys.example.com/{uid}:ABCD1234',
         );
     });
 });
