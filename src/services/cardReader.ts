@@ -86,8 +86,9 @@ export async function readViaIcash(
  */
 export async function readViaServerKeys(
     session: CardSession,
+    prefetched?: Card,
 ): Promise<CardReadResult> {
-    const card = await getCard(session.uid);
+    const card = prefetched ?? (await getCard(session.uid));
     const balance = await readBalance(card);
 
     const warnings: string[] = [];
@@ -128,15 +129,55 @@ export async function readViaServerKeys(
     };
 }
 
+const CLASSIC_ATTEMPTS = 10;
+
 /**
- * 單次感應讀取分流。applet 優先：有 IsoDep 就先讀悠遊卡 applet(卡號＋餘額，超級
- * 悠遊卡連月票一起)——這是最穩、免金鑰的路徑;applet 非悠遊卡(6A82)時改試 icash
- * 2.0(DESFire)。晶片悠遊卡(9122)的 applet 只給卡號與餘額,不含月票。
- *
- * icash 也不是、但有 MIFARE 面向,以及無 applet 的純舊卡/聯名卡,走 MIFARE Classic
- * 後端金鑰路徑(餘額＋月票)。都不成立才拋 FailedToReadCardError。
+ * 雙介面卡(晶片悠遊卡)且金鑰來源有餘額金鑰時，整次感應只走 MIFARE Classic，餘額與
+ * 月票一起讀。不先碰 IsoDep：SmartMX 在同一次感應內從 IsoDep 切到 classic 會連續
+ * 認證失敗。連線一次、同 handle 重試；沒有金鑰或全數失敗回 null，交給 applet。
+ */
+async function tryClassicWithKeys(
+    session: CardSession,
+): Promise<CardReadResult | null> {
+    let card: Card;
+    try {
+        card = await getCard(session.uid);
+    } catch (err) {
+        return null;
+    }
+    if (!card?.sectors?.some((sector) => sector.index === 2 && sector.keyA)) {
+        return null;
+    }
+
+    await session.connectMifareClassic();
+    for (let attempt = 1; attempt <= CLASSIC_ATTEMPTS; attempt++) {
+        try {
+            return await readViaServerKeys(session, card);
+        } catch (err) {
+            if (!(err instanceof FailedToReadCardError)) {
+                throw err;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * 單次感應讀取分流：
+ * 1. 雙介面卡有金鑰 → MIFARE Classic(餘額＋月票)，見 tryClassicWithKeys。
+ * 2. 有 IsoDep → 悠遊卡 applet，免金鑰(卡號＋餘額；9122 不含月票，超級悠遊卡含)。
+ * 3. applet 非悠遊卡(6A82) → icash 2.0(DESFire)，免金鑰。
+ * 4. 都不是但有 MIFARE 面向，或無 applet 的純舊卡/聯名卡 → 後端金鑰路徑。
+ * 都不成立才拋 FailedToReadCardError。
  */
 export async function readCard(session: CardSession): Promise<CardReadResult> {
+    if (session.hasIsoDep && session.hasMifareClassic) {
+        const result = await tryClassicWithKeys(session);
+        if (result) {
+            return result;
+        }
+    }
+
     if (session.hasIsoDep) {
         await session.connectIsoDep();
         try {

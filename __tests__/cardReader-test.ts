@@ -1,3 +1,4 @@
+import { CardLostError } from '../src/error/cardLostError';
 import { EasyCardAppletUnavailableError } from '../src/error/easyCardAppletUnavailableError';
 import { FailedToReadCardError } from '../src/error/failedToReadCardError';
 import { IcashUnavailableError } from '../src/error/icashUnavailableError';
@@ -58,12 +59,23 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     };
 }
 
+const KEYED_CARD = makeCard({
+    sectors: [
+        { index: 2, keyA: 'AA', keyB: null },
+        { index: 6, keyA: 'BB', keyB: null },
+        { index: 8, keyA: 'CC', keyB: null },
+    ],
+});
+
 beforeEach(() => {
-    jest.clearAllMocks();
+    // reset 而非 clear：連 mockResolvedValue／Once 佇列一起清，測試之間不會互相外溢。
+    jest.resetAllMocks();
+    // 預設金鑰來源查無此卡。
+    getCard.mockRejectedValue(new Error('not found'));
 });
 
 describe('readCard', () => {
-    test('1. 晶片悠遊卡(IsoDep+MIFARE): applet 讀卡號餘額(+月票), 不碰 MIFARE 金鑰路徑', async () => {
+    test('1. 晶片悠遊卡(IsoDep+MIFARE)沒有餘額金鑰: applet 讀卡號餘額(+月票), 不碰 MIFARE 金鑰路徑', async () => {
         readEasyCardChip.mockResolvedValue({
             number: '9134',
             balance: 111,
@@ -107,15 +119,33 @@ describe('readCard', () => {
         expect(session.connectMifareClassic).not.toHaveBeenCalled();
     });
 
-    test('3. applet 6A82 + icash 不可用 + 有 MIFARE: 退回後端金鑰路徑讀餘額月票', async () => {
-        readEasyCardChip.mockRejectedValue(
-            new EasyCardAppletUnavailableError(),
-        );
-        readIcashCard.mockRejectedValue(new IcashUnavailableError());
-        getCard.mockResolvedValue(
-            makeCard({ sectors: [{ index: 2, keyA: 'AA', keyB: null }] }),
-        );
+    test('3. 雙介面卡有金鑰(9122 等): 只走 classic 讀餘額＋月票, 不碰 IsoDep', async () => {
+        getCard.mockResolvedValue(KEYED_CARD);
         readBalance.mockResolvedValue(300);
+        readTpassInfo.mockResolvedValue({
+            purchaseDate: new Date('2026-08-24'),
+            expiryDate: new Date('2026-09-22'),
+        });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(session.connectIsoDep).not.toHaveBeenCalled();
+        expect(readEasyCardChip).not.toHaveBeenCalled();
+        expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
+        expect(result.balance).toBe(300);
+        expect(result.tpass?.expiryDate).toEqual(new Date('2026-09-22'));
+        expect(result.serverKeysUsed).toBe(true);
+    });
+
+    test('3a. 雙介面卡 classic 暫時性失敗: 同一連線重試, 不重新連線', async () => {
+        getCard.mockResolvedValue(KEYED_CARD);
+        readBalance
+            .mockRejectedValueOnce(new FailedToReadCardError())
+            .mockResolvedValue(300);
         readTpassInfo.mockResolvedValue({
             purchaseDate: null,
             expiryDate: null,
@@ -127,9 +157,72 @@ describe('readCard', () => {
 
         const result = await readCard(session);
 
+        expect(readBalance).toHaveBeenCalledTimes(2);
         expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
         expect(result.balance).toBe(300);
-        expect(result.serverKeysUsed).toBe(true);
+    });
+
+    test('3b. 雙介面卡 classic 連續失敗 10 次: 退回 applet', async () => {
+        getCard.mockResolvedValue(KEYED_CARD);
+        readBalance.mockRejectedValue(new FailedToReadCardError());
+        readEasyCardChip.mockResolvedValue({ number: '9122', balance: 50 });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(readBalance).toHaveBeenCalledTimes(10);
+        expect(session.connectIsoDep).toHaveBeenCalledTimes(1);
+        expect(result.balance).toBe(50);
+        expect(result.serverKeysUsed).toBe(false);
+    });
+
+    test('3c. 雙介面卡 classic 途中卡已離開: 直接拋出, 不退回 applet', async () => {
+        getCard.mockResolvedValue(KEYED_CARD);
+        readBalance.mockRejectedValue(new CardLostError());
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        await expect(readCard(session)).rejects.toBeInstanceOf(CardLostError);
+        expect(readBalance).toHaveBeenCalledTimes(1);
+        expect(session.connectIsoDep).not.toHaveBeenCalled();
+    });
+
+    test('3d. 雙介面卡有紀錄但缺餘額金鑰: 走 applet', async () => {
+        getCard.mockResolvedValue(
+            makeCard({ sectors: [{ index: 8, keyA: 'CC', keyB: null }] }),
+        );
+        readEasyCardChip.mockResolvedValue({ number: '9122', balance: 70 });
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        const result = await readCard(session);
+
+        expect(session.connectMifareClassic).not.toHaveBeenCalled();
+        expect(result.balance).toBe(70);
+    });
+
+    test('3e. 雙介面聯名卡查無金鑰 + applet 6A82 + icash 不可用: 後端查無此卡的錯誤往上拋', async () => {
+        const notFound = new Error('not found');
+        getCard.mockRejectedValue(notFound);
+        readEasyCardChip.mockRejectedValue(
+            new EasyCardAppletUnavailableError(),
+        );
+        readIcashCard.mockRejectedValue(new IcashUnavailableError());
+        const session = makeSession({
+            hasIsoDep: true,
+            hasMifareClassic: true,
+        });
+
+        await expect(readCard(session)).rejects.toBe(notFound);
+        expect(session.connectIsoDep).toHaveBeenCalledTimes(1);
+        expect(session.connectMifareClassic).toHaveBeenCalledTimes(1);
     });
 
     test('4. applet 6A82 + icash 不可用 + 無 MIFARE: IcashUnavailableError 往上拋', async () => {
@@ -195,7 +288,6 @@ describe('readCard', () => {
         );
     });
 });
-
 
 describe('readViaApplet', () => {
     test('7. backend has no record (getCard throws): still succeeds, nickname empty, sectors empty, serverKeysUsed false', async () => {
